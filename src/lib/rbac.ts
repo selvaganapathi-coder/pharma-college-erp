@@ -1,7 +1,5 @@
-import type { Role } from "./types";
-
 export const PERMISSIONS = {
-  students: { read: ["admin", "staff"], write: ["admin", "staff"] },
+  students: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
   staff: { read: ["admin", "staff"], write: ["admin"] },
   departments: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
   courses: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
@@ -21,11 +19,11 @@ export const PERMISSIONS = {
 
 export type ModuleKey = keyof typeof PERMISSIONS;
 
-export function can(role: Role, module: ModuleKey, action: "read" | "write") {
+export function can(role: "admin" | "staff" | "student" | "parent", module: ModuleKey, action: "read" | "write") {
   return (PERMISSIONS[module][action] as readonly string[]).includes(role);
 }
 
-export function roleLabel(role: Role) {
+export function roleLabel(role: "admin" | "staff" | "student" | "parent") {
   if (role === "admin") return "Admin";
   if (role === "staff") return "Staff";
   if (role === "student") return "Student";

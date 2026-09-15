@@ -3,63 +3,45 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CourseSelect, SectionSelect, StaffSelect } from "@/components/linked-selects";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
-import { pick } from "@/lib/pick";
-
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-const PERIODS = ["9:00 AM", "10:00 AM", "11:15 AM", "12:15 PM"];
+import { uid } from "@/lib/store";
+import { DAYS, PERIODS, type TimetableSlot } from "@/lib/types";
 
 export default function TimetablePage() {
-  const { state, scopedStudentId } = useApp();
+  const { state, save, remove, allowed, scopedStudentId } = useApp();
   const sid = scopedStudentId();
   const defaultSection = sid
     ? state.students.find((s) => s.id === sid)?.sectionId ?? state.sections[0]?.id
     : state.sections[0]?.id;
   const [sectionId, setSectionId] = useState(defaultSection ?? "");
+  const canWrite = allowed("timetable", "write") && !sid;
+  const [edit, setEdit] = useState<{ day: string; period: string; slot?: TimetableSlot } | null>(null);
 
-  const slots = useMemo(
-    () => state.timetable.filter((t) => t.sectionId === sectionId),
-    [state.timetable, sectionId],
-  );
+  const slots = useMemo(() => state.timetable.filter((t) => t.sectionId === sectionId), [state.timetable, sectionId]);
+  const section = state.sections.find((s) => s.id === sectionId);
+  const programme = state.courses.find((c) => c.id === section?.courseId);
 
   function cell(day: string, period: string) {
-    const slot = slots.find((s) => s.day === day && s.period === period);
-    if (!slot) return <span className="text-xs text-[#6B4A1F]">Free</span>;
-    const course = state.courses.find((c) => c.id === slot.courseId);
-    const staff = state.staff.find((t) => t.id === slot.staffId);
-    return (
-      <div>
-        <p className="font-medium text-[#8B1528]">{course?.name}</p>
-        <p className="text-xs text-[#6B4A1F]">{staff?.name}</p>
-        <p className="text-xs">{slot.room}</p>
-      </div>
-    );
+    return slots.find((s) => s.day === day && s.period === period);
   }
 
   return (
     <Guard module="timetable">
       <PageHeader
         title="Timetable"
-        note="See the week plan for a section. Students and parents see their own class first."
+        note="Pick a section. Staff can tap a cell to set subject, teacher, and room. Students see their class only."
       />
       <div className="mb-4 max-w-xs">
-        <Select value={sectionId} onValueChange={pick(setSectionId)}>
-          <SelectTrigger className="bg-white">
-            <SelectValue placeholder="Pick a section" />
-          </SelectTrigger>
-          <SelectContent>
-            {state.sections.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />
       </div>
-      <div className="overflow-x-auto rounded-xl border border-[#F0C94A] bg-white">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-[#FFF3C4] text-[#7A1F1F]">
+      <div className="overflow-x-auto rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2]">
+        <table className="w-full min-w-[860px] text-sm text-[#C41E3A]">
+          <thead className="bg-[#FFD000]">
             <tr>
               <th className="p-3 text-left">Time</th>
               {DAYS.map((d) => (
@@ -71,18 +53,150 @@ export default function TimetablePage() {
           </thead>
           <tbody>
             {PERIODS.map((p) => (
-              <tr key={p} className="border-t border-[#F0C94A]">
-                <td className="p-3 font-medium">{p}</td>
-                {DAYS.map((d) => (
-                  <td key={d} className="p-3 align-top">
-                    {cell(d, p)}
-                  </td>
-                ))}
+              <tr key={p} className="border-t border-[#C41E3A]">
+                <td className="p-3 font-semibold">{p}</td>
+                {DAYS.map((d) => {
+                  const slot = cell(d, p);
+                  const course = state.courses.find((c) => c.id === slot?.courseId);
+                  const staff = state.staff.find((t) => t.id === slot?.staffId);
+                  return (
+                    <td key={d} className="p-2 align-top">
+                      <button
+                        type="button"
+                        disabled={!canWrite}
+                        className="w-full rounded-lg border border-[#C41E3A] bg-[#FFE566] p-2 text-left"
+                        onClick={() => setEdit({ day: d, period: p, slot })}
+                      >
+                        {slot ? (
+                          <>
+                            <p className="font-medium">{course?.name}</p>
+                            <p className="text-xs">{staff?.name}</p>
+                            <p className="text-xs">{slot.room}</p>
+                          </>
+                        ) : (
+                          <span className="text-xs">{canWrite ? "Tap to add" : "Free"}</span>
+                        )}
+                      </button>
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <Dialog open={Boolean(edit)} onOpenChange={(o) => !o && setEdit(null)}>
+        <DialogContent className="bg-[#FFF8C2]">
+          <DialogHeader>
+            <DialogTitle className="text-[#C41E3A]">
+              {edit?.day} · {edit?.period}
+            </DialogTitle>
+          </DialogHeader>
+          {edit ? (
+            <SlotForm
+              sectionId={sectionId}
+              departmentId={programme?.departmentId}
+              day={edit.day}
+              period={edit.period}
+              slot={edit.slot}
+              onClose={() => setEdit(null)}
+              onSave={async (slot) => {
+                await save("timetable", slot, `Set ${slot.day} ${slot.period} for section ${sectionId}.`);
+                setEdit(null);
+              }}
+              onDelete={
+                edit.slot
+                  ? async () => {
+                      await remove("timetable", edit.slot!.id, `Cleared ${edit.day} ${edit.period}.`);
+                      setEdit(null);
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Guard>
+  );
+}
+
+function SlotForm({
+  sectionId,
+  departmentId,
+  day,
+  period,
+  slot,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  sectionId: string;
+  departmentId?: string;
+  day: string;
+  period: string;
+  slot?: TimetableSlot;
+  onSave: (slot: TimetableSlot) => Promise<void>;
+  onDelete?: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const { state } = useApp();
+  const [courseId, setCourseId] = useState(slot?.courseId ?? "");
+  const [staffId, setStaffId] = useState(slot?.staffId ?? "");
+  const [room, setRoom] = useState(slot?.room ?? "");
+  const subject = state.courses.find((c) => c.id === courseId);
+
+  return (
+    <div className="space-y-3">
+      <CourseSelect
+        courses={state.courses}
+        departmentId={subject?.departmentId ?? departmentId}
+        kind="subject"
+        value={courseId}
+        onChange={(id) => {
+          setCourseId(id);
+          const c = state.courses.find((x) => x.id === id);
+          const teacher = state.staff.find((t) => t.courseIds.includes(id) || t.departmentId === c?.departmentId);
+          if (teacher) setStaffId(teacher.id);
+        }}
+      />
+      <StaffSelect
+        staff={state.staff}
+        departmentId={subject?.departmentId ?? departmentId}
+        value={staffId}
+        onChange={setStaffId}
+      />
+      <div className="space-y-1">
+        <Label>Room</Label>
+        <Input value={room} onChange={(e) => setRoom(e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <Button
+          className="bg-[#C41E3A] text-[#FFE566]"
+          disabled={!courseId || !staffId}
+          onClick={() =>
+            onSave({
+              id: slot?.id ?? uid("tt"),
+              sectionId,
+              day,
+              period,
+              courseId,
+              staffId,
+              room,
+            })
+          }
+        >
+          Save slot
+        </Button>
+        {onDelete ? (
+          <Button variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={onDelete}>
+            Clear
+          </Button>
+        ) : (
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

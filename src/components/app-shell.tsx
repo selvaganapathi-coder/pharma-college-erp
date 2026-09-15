@@ -62,18 +62,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const items = useMemo(() => {
     if (!user) return [];
-    return NAV.filter((item) => {
-      if (item.href === "/app") return true;
-      return can(user.role, item.module, "read");
-    });
+    return NAV.filter((item) => item.href === "/app" || can(user.role, item.module, "read"));
   }, [user]);
 
   const unread = state.notices.filter((n) => n.urgent).length;
 
   if (!ready || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--gp-cream)] text-[#7A1F1F]">
-        Loading your college portal…
+      <div className="flex min-h-screen items-center justify-center bg-[#FFE566] text-[#C41E3A]">
+        Loading GP Pharmacy College ERP…
       </div>
     );
   }
@@ -82,21 +79,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <nav className="flex flex-col gap-1">
         {items.map((item) => {
-          const active = pathname === item.href;
+          const active = pathname === item.href || (item.href !== "/app" && pathname.startsWith(item.href));
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
               onClick={onClick}
-              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-                active ? "bg-[#C41E3A] text-white" : "text-[#4A1C1C] hover:bg-[#FFF3C4]"
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${
+                active ? "bg-[#C41E3A] text-[#FFE566]" : "text-[#C41E3A] hover:bg-[#FFF3A0]"
               }`}
             >
               <Icon className="size-4 shrink-0" />
               {item.label}
               {item.href === "/app/alerts" && unread > 0 ? (
-                <Badge className="ml-auto bg-[#EAB308] text-[#4A1C1C]">{unread}</Badge>
+                <Badge className="ml-auto bg-[#C41E3A] text-[#FFE566]">{unread}</Badge>
               ) : null}
             </Link>
           );
@@ -106,39 +103,33 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFF8EA]">
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-[#F0C94A] bg-[#C41E3A] px-3 py-3 text-white md:px-5">
+    <div className="min-h-screen bg-[#FFE566] text-[#C41E3A]">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b-2 border-[#C41E3A] bg-[#FFD000] px-3 py-3 md:px-5">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
-            render={<Button variant="secondary" size="icon-sm" className="md:hidden bg-[#EAB308] text-[#4A1C1C]" />}
+            render={<Button variant="secondary" size="icon-sm" className="md:hidden bg-[#C41E3A] text-[#FFE566]" />}
           >
             <Menu />
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 bg-[#FFF8EA]">
+          <SheetContent side="left" className="w-72 bg-[#FFE566] text-[#C41E3A]">
             <SheetHeader>
-              <SheetTitle>GP Pharmacy College</SheetTitle>
+              <SheetTitle className="text-[#C41E3A]">GP Pharmacy College</SheetTitle>
             </SheetHeader>
-            <div className="px-2">
-              {renderNav(() => setOpen(false))}
-            </div>
+            <div className="px-2">{renderNav(() => setOpen(false))}</div>
           </SheetContent>
         </Sheet>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold tracking-wide">GP Pharmacy College</p>
-          <p className="truncate text-xs text-white/85">College ERP · easy records and alerts</p>
+          <p className="truncate text-sm font-bold tracking-wide text-[#C41E3A]">GP Pharmacy College</p>
+          <p className="truncate text-xs text-[#C41E3A]">Full ERP · records, class, fees, library</p>
         </div>
-        <Badge className={online ? "bg-[#EAB308] text-[#4A1C1C]" : "bg-white/20 text-white"}>
-          {online ? "Online" : "Offline mode"}
-        </Badge>
-        <Badge className="hidden bg-white/15 text-white sm:inline-flex">Firebase</Badge>
+        <Badge className="bg-[#C41E3A] text-[#FFE566]">{online ? "Online" : "Offline"}</Badge>
         <div className="hidden text-right text-xs sm:block">
-          <p className="font-medium">{user.name}</p>
-          <p className="text-white/80">{roleLabel(user.role)}</p>
+          <p className="font-semibold text-[#C41E3A]">{user.name}</p>
+          <p>{roleLabel(user.role)}</p>
         </div>
         <Button
-          variant="secondary"
           size="sm"
-          className="bg-[#EAB308] text-[#4A1C1C] hover:bg-[#F5D76E]"
+          className="bg-[#C41E3A] text-[#FFE566]"
           onClick={() => {
             logout();
             router.replace("/");
@@ -149,12 +140,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Button>
       </header>
       <div className="mx-auto flex max-w-7xl">
-        <aside className="sticky top-[61px] hidden h-[calc(100vh-61px)] w-56 shrink-0 overflow-y-auto border-r border-[#F0C94A] bg-white p-3 md:block">
+        <aside className="sticky top-[61px] hidden h-[calc(100vh-61px)] w-56 shrink-0 overflow-y-auto border-r-2 border-[#C41E3A] bg-[#FFEF8A] p-3 md:block">
           {renderNav()}
         </aside>
         <main className="min-w-0 flex-1 p-4 md:p-6">
           {firebaseNote ? (
-            <p className="mb-4 rounded-lg border border-[#F0C94A] bg-[#FFF3C4] px-3 py-2 text-sm text-[#4A1C1C]">
+            <p className="mb-4 rounded-lg border-2 border-[#C41E3A] bg-[#FFF3A0] px-3 py-2 text-sm text-[#C41E3A]">
               {firebaseNote}
             </p>
           ) : null}

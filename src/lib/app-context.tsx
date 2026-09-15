@@ -10,9 +10,20 @@ import {
   type ReactNode,
 } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import type { AppState, AuditLog, Role, User } from "@/lib/types";
+import type { AppState, CollectionKey, Role, User } from "@/lib/types";
 import { EMPTY_STATE } from "@/lib/types";
-import { loadState, persistState, pullCloudState, readSession, saveSession, uid } from "@/lib/storage";
+import {
+  listenAll,
+  loadState,
+  makeAudit,
+  persistLocal,
+  readSession,
+  removeRow,
+  saveSession,
+  seedCloudIfEmpty,
+  uploadPhoto,
+  writeRow,
+} from "@/lib/store";
 import { can, type ModuleKey } from "@/lib/rbac";
 import { firebaseSignIn, firebaseSignOut, getFirebase } from "@/lib/firebase";
 
@@ -21,13 +32,14 @@ type AppContextValue = {
   online: boolean;
   user: User | null;
   state: AppState;
-  login: (email: string, password: string) => Promise<string | null>;
   firebaseNote: string | null;
+  login: (email: string, password: string) => Promise<string | null>;
   logout: () => void;
   allowed: (module: ModuleKey, action?: "read" | "write") => boolean;
   scopedStudentId: () => string | undefined;
-  mutate: (writer: (draft: AppState) => string, entity: string, entityId: string) => void;
-  log: (action: string, entity: string, entityId: string, details: string) => void;
+  save: <K extends CollectionKey>(key: K, row: AppState[K][number], details: string) => Promise<void>;
+  remove: (key: CollectionKey, id: string, details: string) => Promise<void>;
+  upload: (folder: string, id: string, file: File) => Promise<string>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -53,82 +65,75 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
+    const unsubLive = listenAll((key, rows) => {
+      if (!alive || !rows.length) return;
+      setState((prev) => {
+        const next = { ...prev, [key]: rows };
+        void persistLocal(next);
+        return next;
+      });
+    });
     const fb = getFirebase();
-    const unsub = fb
+    const unsubAuth = fb
       ? onAuthStateChanged(fb.auth, async (fbUser) => {
           if (!alive || !fbUser) return;
-          const remote = await pullCloudState();
-          if (remote && alive) {
-            setState(remote);
-            const match = remote.users.find(
-              (u) => u.email.toLowerCase() === fbUser.email?.toLowerCase() && u.active,
-            );
-            if (match) {
-              setUserId(match.id);
-              saveSession(match.id);
-            }
-          }
+          await seedCloudIfEmpty(state);
         })
       : undefined;
     return () => {
       alive = false;
-      unsub?.();
+      unsubLive();
+      unsubAuth?.();
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed uses latest state on first auth
   }, []);
 
   const user = state.users.find((u) => u.id === userId && u.active) ?? null;
 
-  const persist = useCallback((next: AppState) => {
-    setState(next);
-    void persistState(next);
-  }, []);
-
-  const log = useCallback(
-    (action: string, entity: string, entityId: string, details: string) => {
+  const audit = useCallback(
+    async (action: string, entity: string, entityId: string, details: string) => {
+      const entry = makeAudit(user?.id ?? "system", user?.name ?? "System", action, entity, entityId, details);
       setState((prev) => {
-        const entry: AuditLog = {
-          id: uid("log"),
-          at: new Date().toISOString(),
-          actorId: user?.id ?? "system",
-          actorName: user?.name ?? "System",
-          action,
-          entity,
-          entityId,
-          details,
-          online: navigator.onLine,
-        };
-        const next = { ...prev, auditLogs: [entry, ...prev.auditLogs].slice(0, 500) };
-        void persistState(next);
+        const next = { ...prev, auditLogs: [entry, ...prev.auditLogs].slice(0, 800) };
+        void persistLocal(next);
         return next;
       });
+      await writeRow("auditLogs", entry);
     },
     [user],
   );
 
-  const mutate = useCallback(
-    (writer: (draft: AppState) => string, entity: string, entityId: string) => {
+  const save = useCallback(
+    async <K extends CollectionKey>(key: K, row: AppState[K][number], details: string) => {
+      const item = row as AppState[K][number] & { id: string };
       setState((prev) => {
-        const draft = structuredClone(prev);
-        const details = writer(draft);
-        const entry: AuditLog = {
-          id: uid("log"),
-          at: new Date().toISOString(),
-          actorId: user?.id ?? "system",
-          actorName: user?.name ?? "System",
-          action: "update",
-          entity,
-          entityId,
-          details,
-          online: navigator.onLine,
-        };
-        draft.auditLogs = [entry, ...draft.auditLogs].slice(0, 500);
-        void persistState(draft);
-        return draft;
+        const list = prev[key] as { id: string }[];
+        const exists = list.some((r) => r.id === item.id);
+        const rows = (exists ? list.map((r) => (r.id === item.id ? item : r)) : [item, ...list]) as AppState[K];
+        const next = { ...prev, [key]: rows };
+        void persistLocal(next);
+        return next;
       });
+      await writeRow(key, item);
+      await audit("save", key, item.id, details);
     },
-    [user],
+    [audit],
+  );
+
+  const remove = useCallback(
+    async (key: CollectionKey, id: string, details: string) => {
+      setState((prev) => {
+        const rows = (prev[key] as { id: string }[]).filter((r) => r.id !== id);
+        const next = { ...prev, [key]: rows };
+        void persistLocal(next);
+        return next;
+      });
+      await removeRow(key, id);
+      await audit("delete", key, id, details);
+    },
+    [audit],
   );
 
   const login = useCallback(
@@ -139,41 +144,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!found) return "Email or password is wrong. Try a demo login below.";
       const fb = await firebaseSignIn(found.email, password);
       setFirebaseNote(fb.note);
-      const remote = fb.ok ? await pullCloudState() : null;
-      const base = remote ?? state;
-      const account =
-        base.users.find((u) => u.email.toLowerCase() === found.email.toLowerCase() && u.active) ?? found;
-      setUserId(account.id);
-      saveSession(account.id);
-      persist({
-        ...base,
-        auditLogs: [
-          {
-            id: uid("log"),
-            at: new Date().toISOString(),
-            actorId: account.id,
-            actorName: account.name,
-            action: "login",
-            entity: "session",
-            entityId: account.id,
-            details: `${account.role} signed in. ${fb.note}`,
-            online: navigator.onLine,
-          },
-          ...base.auditLogs,
-        ].slice(0, 500),
-      });
+      setUserId(found.id);
+      saveSession(found.id);
+      if (fb.ok) await seedCloudIfEmpty(state);
+      await audit("login", "session", found.id, `${found.role} signed in. ${fb.note}`);
       return null;
     },
-    [persist, state],
+    [audit, state],
   );
 
   const logout = useCallback(() => {
-    if (user) log("logout", "session", user.id, `${user.role} signed out.`);
+    if (user) void audit("logout", "session", user.id, `${user.role} signed out.`);
     void firebaseSignOut();
     setUserId(null);
     saveSession(null);
     setFirebaseNote(null);
-  }, [log, user]);
+  }, [audit, user]);
 
   const allowed = useCallback(
     (module: ModuleKey, action: "read" | "write" = "read") => {
@@ -190,21 +176,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return undefined;
   }, [user]);
 
+  const upload = useCallback((folder: string, id: string, file: File) => uploadPhoto(folder, id, file), []);
+
   const value = useMemo(
     () => ({
       ready,
       online,
       user,
       state,
+      firebaseNote,
       login,
       logout,
       allowed,
       scopedStudentId,
-      mutate,
-      log,
-      firebaseNote,
+      save,
+      remove,
+      upload,
     }),
-    [ready, online, user, state, login, logout, allowed, scopedStudentId, mutate, log, firebaseNote],
+    [ready, online, user, state, firebaseNote, login, logout, allowed, scopedStudentId, save, remove, upload],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

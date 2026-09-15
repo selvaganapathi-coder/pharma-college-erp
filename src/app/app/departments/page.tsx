@@ -3,76 +3,123 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
-import { SearchTable } from "@/components/search-table";
+import { DataTable } from "@/components/data-table";
+import { PhotoUpload } from "@/components/photo-upload";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
-import { uid } from "@/lib/storage";
+import { uid } from "@/lib/store";
+import type { Department } from "@/lib/types";
 
 export default function DepartmentsPage() {
-  const { state, mutate, allowed } = useApp();
-  const [open, setOpen] = useState(false);
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [head, setHead] = useState("");
+  const { state, save, remove, allowed, upload } = useApp();
   const canWrite = allowed("departments", "write");
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Department | null>(null);
 
   return (
     <Guard module="departments">
       <PageHeader
         title="Departments"
-        note="Each pharmacy subject group has a code and a head of department."
+        note="Pharmacy subject groups. Staff and courses hang from a department. You can add, edit, or delete."
         action={
           canWrite ? (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger render={<Button className="bg-[#C41E3A] text-white" />}>Add department</DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>New department</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label>Code</Label>
-                    <Input value={code} onChange={(e) => setCode(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Name</Label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Head of department</Label>
-                    <Input value={head} onChange={(e) => setHead(e.target.value)} />
-                  </div>
-                  <Button
-                    className="bg-[#C41E3A] text-white"
-                    onClick={() => {
-                      mutate((draft) => {
-                        draft.departments.push({ id: uid("d"), code, name, head });
-                        return `Added department ${name}.`;
-                      }, "departments", code);
-                      setOpen(false);
-                    }}
-                  >
-                    Save
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button
+              className="bg-[#C41E3A] text-[#FFE566]"
+              onClick={() => {
+                setForm({ id: uid("d"), code: "", name: "", head: "", phone: "" });
+                setOpen(true);
+              }}
+            >
+              Add department
+            </Button>
           ) : null
         }
       />
-      <SearchTable
+      <DataTable
         rows={state.departments}
         empty="No department found."
+        canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.code} ${row.head}`.toLowerCase().includes(q)}
+        onEdit={(r) => {
+          setForm(r);
+          setOpen(true);
+        }}
+        onDelete={(r) => {
+          if (state.courses.some((c) => c.departmentId === r.id) || state.staff.some((t) => t.departmentId === r.id)) {
+            alert("Move or delete courses and staff in this department first.");
+            return;
+          }
+          void remove("departments", r.id, `Deleted department ${r.name}.`);
+        }}
         columns={[
+          {
+            key: "photo",
+            header: "Photo",
+            cell: (r) =>
+              r.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={r.photoUrl} alt="" className="size-10 rounded object-cover" />
+              ) : (
+                "—"
+              ),
+          },
           { key: "code", header: "Code", cell: (r) => r.code },
           { key: "name", header: "Name", cell: (r) => r.name },
           { key: "head", header: "Head", cell: (r) => r.head },
+          { key: "phone", header: "Phone", cell: (r) => r.phone ?? "—" },
+          {
+            key: "n",
+            header: "Staff",
+            cell: (r) => state.staff.filter((t) => t.departmentId === r.id).length,
+          },
         ]}
       />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="bg-[#FFF8C2]">
+          <DialogHeader>
+            <DialogTitle className="text-[#C41E3A]">Department</DialogTitle>
+          </DialogHeader>
+          {form ? (
+            <div className="space-y-3">
+              <PhotoUpload
+                label="Department photo"
+                value={form.photoUrl}
+                onChange={(url) => setForm({ ...form, photoUrl: url })}
+                onFile={(file) => upload("departments", form.id, file)}
+              />
+              <div className="space-y-1">
+                <Label>Code</Label>
+                <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Head</Label>
+                <Input value={form.head} onChange={(e) => setForm({ ...form, head: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Phone</Label>
+                <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <Button
+                className="bg-[#C41E3A] text-[#FFE566]"
+                disabled={!form.name}
+                onClick={async () => {
+                  await save("departments", form, `Saved department ${form.name}.`);
+                  setOpen(false);
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Guard>
   );
 }

@@ -1,68 +1,46 @@
 # GP Pharmacy College ERP
 
-College portal for **GP Pharmacy College**. Staff, students, and parents use one login page. The theme is red and yellow. Words on screen stay short and clear.
+Full college ERP for **GP Pharmacy College**. Yellow screens, red text. Students, parents, staff, and admin each get the right pages.
 
 ## What you can do
 
-- Student and staff records
-- Departments, courses, and sections
-- Timetable and attendance
-- Exam marks
-- Fee payment (demo GP Pay; live Razorpay keys optional)
-- Alerts on WhatsApp, SMS, email, and in-app (MSG91 optional)
-- Message portal for urgent notes
-- Reports with charts
-- Bus transport
-- Library books and checkouts
-- Audit logs for admin actions
-- Offline use (service worker + browser database)
-- Role access: admin, staff, student, parent
+- Full **add / view / edit / delete** for students, staff, departments, courses, sections, timetable, exams, fees, books, and bus routes
+- **Photo upload** (student, staff, department, book cover, bus)
+- **Live lists**: department → course → section → staff
+- Timetable editor, attendance, exam lock, fee plans, pay, print receipt
+- Library issue/return with overdue fine
+- Alerts on WhatsApp, SMS, email, in-app (MSG91/SMTP keys for live send)
+- Reports + CSV, audit log
+- Offline copy on this device + Firebase cloud when signed in
 
-## Run locally
+## Run
 
 ```bash
 npm install
-npm run dev -- --port 43123
+npm run dev
 ```
 
-Open [http://localhost:43123](http://localhost:43123).
+Open http://localhost:43123
 
-### Demo logins (password `college123`)
+Password for all demo users: `college123`
 
-| Who | Email |
+| Role | Email |
 | --- | --- |
 | Admin | admin@gppharmacy.edu |
 | Staff | staff@gppharmacy.edu |
 | Student | student@gppharmacy.edu |
 | Parent | parent@gppharmacy.edu |
 
-## Firebase (project pharmacy-98684)
+## Firebase (pharmacy-98684)
 
-The portal is wired to this Firebase project. First time in the [Firebase console](https://console.firebase.google.com/project/pharmacy-98684):
+1. Authentication → enable Email/Password
+2. Create Firestore and Storage
+3. Publish `firestore.rules` and `storage.rules`
 
-1. Authentication → Sign-in method → enable **Email/Password**.
-2. Firestore Database → create the database (start in production).
-3. Firestore → Rules → paste `firestore.rules` from this repo and publish.
+First admin sign-in uploads college data to separate collections (`students`, `staff`, `departments`, …).
 
-Sign-in still uses the college demo emails. The first successful Firebase login creates that Auth user and uploads college data to `erp/state`.
+## Live keys (optional)
 
-MSG91 WhatsApp/SMS is not connected yet.
+`.env.local`: `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`, `SMTP_HOST`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`
 
-## Optional later
-
-- **MSG91**: WhatsApp and SMS from `/api/notify`
-- **Razorpay**: live fee capture from `/api/pay`
-
-## Data shape (fast reads)
-
-Collections are keyed by `id`. Common filters use `studentId`, `sectionId`, `examId`, `date`, and `status`. Firestore composite indexes are in `firestore.indexes.json`. Rules are in `firestore.rules`.
-
-The running app keeps a memory copy for instant screens, writes to IndexedDB, then syncs to Firestore when configured and online.
-
-## Security
-
-- Role checks on every page
-- Students and parents only see linked records
-- Card numbers are not saved
-- Audit log on login, logout, and every change
-- Firestore rules deny public access
+The screens already send through `/api/notify` and `/api/pay`. Without keys, alerts queue and fees still issue a receipt in demo mode.

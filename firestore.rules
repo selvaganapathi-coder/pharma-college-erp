@@ -5,22 +5,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // College ERP blob. Any signed-in staff, student, or parent can sync.
-    // Role checks also run in the app.
-    match /erp/{doc} {
-      allow read, write: if signedIn();
-    }
-
-    match /users/{uid} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() && request.auth.uid == uid;
-      allow delete: if false;
-    }
-
-    match /auditLogs/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if false;
+    match /{col}/{id} {
+      allow read, write: if signedIn() && col in [
+        'users','departments','courses','sections','students','staff','timetable',
+        'attendance','exams','marks','feePlans','fees','notices','messages','routes',
+        'books','checkouts','auditLogs'
+      ];
     }
 
     match /{document=**} {

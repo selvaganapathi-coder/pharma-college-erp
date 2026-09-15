@@ -3,19 +3,9 @@
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useApp } from "@/lib/app-context";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function ReportsPage() {
   const { state } = useApp();
@@ -37,19 +27,34 @@ export default function ReportsPage() {
   const examAvg = state.exams.map((ex) => {
     const marks = state.marks.filter((m) => m.examId === ex.id);
     const avg = marks.length ? Math.round(marks.reduce((s, m) => s + m.marks, 0) / marks.length) : 0;
-    return { name: ex.name.replace("Sessional 1 — ", "S1 "), avg };
+    return { name: ex.name, avg };
   });
+
+  function csv() {
+    const lines = ["type,name,value", ...bySection.map((r) => `attendance,${r.name},${r.pct}`), ...fees.map((r) => `fees,${r.name},${r.value}`)];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "gp-pharmacy-report.csv";
+    a.click();
+  }
 
   return (
     <Guard module="reports">
       <PageHeader
         title="Reports"
-        note="Simple charts for attendance, fees, and exam scores. Use this in staff meetings. Data updates as soon as you save records."
+        note="Live charts from attendance, fees, and exams. Download a CSV for the office."
+        action={
+          <Button className="bg-[#C41E3A] text-[#FFE566]" onClick={csv}>
+            Download CSV
+          </Button>
+        }
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-[#8B1528]">Attendance mix</CardTitle>
+            <CardTitle>Attendance mix</CardTitle>
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -66,7 +71,7 @@ export default function ReportsPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-[#8B1528]">Fee collection (₹)</CardTitle>
+            <CardTitle>Fee collection (₹)</CardTitle>
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -82,7 +87,7 @@ export default function ReportsPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-[#8B1528]">Attendance by section</CardTitle>
+            <CardTitle>Attendance by section</CardTitle>
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -91,14 +96,14 @@ export default function ReportsPage() {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="pct" fill="#EAB308" radius={6} />
+                <Bar dataKey="pct" fill="#C41E3A" radius={6} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-[#8B1528]">Average exam marks</CardTitle>
+            <CardTitle>Average exam marks</CardTitle>
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">

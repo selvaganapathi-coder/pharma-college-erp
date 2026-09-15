@@ -3,124 +3,125 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
+import { PhotoUpload } from "@/components/photo-upload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
-import { uid } from "@/lib/storage";
+import { uid } from "@/lib/store";
+import type { BusRoute } from "@/lib/types";
 
 export default function TransportPage() {
-  const { state, mutate, allowed, scopedStudentId } = useApp();
+  const { state, save, remove, allowed, scopedStudentId, upload } = useApp();
   const sid = scopedStudentId();
+  const canWrite = allowed("transport", "write") && !sid;
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [vehicleNo, setVehicleNo] = useState("");
-  const [driver, setDriver] = useState("");
-  const [driverPhone, setDriverPhone] = useState("");
-  const [stops, setStops] = useState("");
-  const [seats, setSeats] = useState("30");
+  const [form, setForm] = useState<BusRoute | null>(null);
+  const routes = state.routes.filter((r) => {
+    if (!sid) return true;
+    return state.students.find((s) => s.id === sid)?.busRouteId === r.id;
+  });
 
   return (
     <Guard module="transport">
       <PageHeader
         title="Transport"
-        note="Bus routes, drivers, and who sits on each bus. Students see their own route."
+        note="Bus routes, vehicle photo, driver, stops, and who rides. Add, edit, or delete a route."
         action={
-          allowed("transport", "write") ? (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger render={<Button className="bg-[#C41E3A] text-white" />}>Add route</DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>New bus route</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label>Route name</Label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Vehicle number</Label>
-                    <Input value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Driver</Label>
-                    <Input value={driver} onChange={(e) => setDriver(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Driver phone</Label>
-                    <Input value={driverPhone} onChange={(e) => setDriverPhone(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Stops</Label>
-                    <Input value={stops} onChange={(e) => setStops(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Seats</Label>
-                    <Input value={seats} onChange={(e) => setSeats(e.target.value)} />
-                  </div>
-                  <Button
-                    className="bg-[#C41E3A] text-white"
-                    onClick={() => {
-                      mutate((draft) => {
-                        draft.routes.push({
-                          id: uid("r"),
-                          name,
-                          vehicleNo,
-                          driver,
-                          driverPhone,
-                          stops,
-                          seats: Number(seats) || 0,
-                        });
-                        return `Added bus route ${name}.`;
-                      }, "transport", name);
-                      setOpen(false);
-                    }}
-                  >
-                    Save route
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+          canWrite ? (
+            <Button
+              className="bg-[#C41E3A] text-[#FFE566]"
+              onClick={() => {
+                setForm({ id: uid("r"), name: "", vehicleNo: "", driver: "", driverPhone: "", stops: "", seats: 30 });
+                setOpen(true);
+              }}
+            >
+              Add route
+            </Button>
           ) : null
         }
       />
       <div className="grid gap-4 md:grid-cols-2">
-        {state.routes
-          .filter((r) => {
-            if (!sid) return true;
-            return state.students.find((s) => s.id === sid)?.busRouteId === r.id;
-          })
-          .map((r) => {
-            const riders = state.students.filter((s) => s.busRouteId === r.id);
-            return (
-              <Card key={r.id}>
-                <CardHeader>
-                  <CardTitle className="text-[#8B1528]">{r.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <p>
-                    Bus {r.vehicleNo} · {r.seats} seats
-                  </p>
-                  <p>
-                    Driver {r.driver} · {r.driverPhone}
-                  </p>
-                  <p className="text-[#6B4A1F]">Stops: {r.stops}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {riders.length === 0 ? <span>No students on this route yet.</span> : null}
-                    {riders.map((s) => (
-                      <Badge key={s.id} variant="outline">
-                        {s.name}
-                      </Badge>
-                    ))}
+        {routes.map((r) => {
+          const riders = state.students.filter((s) => s.busRouteId === r.id);
+          return (
+            <Card key={r.id}>
+              <CardHeader>
+                <CardTitle>{r.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {r.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.photoUrl} alt="" className="h-32 w-full rounded-lg object-cover" />
+                ) : null}
+                <p>
+                  Bus {r.vehicleNo} · {r.seats} seats · {riders.length} students
+                </p>
+                <p>
+                  Driver {r.driver} · {r.driverPhone}
+                </p>
+                <p>Stops: {r.stops}</p>
+                <div className="flex flex-wrap gap-1">
+                  {riders.map((s) => (
+                    <Badge key={s.id} variant="outline">
+                      {s.name}
+                    </Badge>
+                  ))}
+                </div>
+                {canWrite ? (
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-[#C41E3A] text-[#FFE566]" onClick={() => { setForm(r); setOpen(true); }}>
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={() => void remove("routes", r.id, `Deleted route ${r.name}.`)}>
+                      Delete
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                ) : null}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto bg-[#FFF8C2]">
+          <DialogHeader>
+            <DialogTitle className="text-[#C41E3A]">Bus route</DialogTitle>
+          </DialogHeader>
+          {form ? (
+            <div className="space-y-3">
+              <PhotoUpload
+                label="Vehicle photo"
+                value={form.photoUrl}
+                onChange={(url) => setForm({ ...form, photoUrl: url })}
+                onFile={(file) => upload("transport", form.id, file)}
+              />
+              {(["name", "vehicleNo", "driver", "driverPhone", "stops"] as const).map((key) => (
+                <div key={key} className="space-y-1">
+                  <Label>{key}</Label>
+                  <Input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                </div>
+              ))}
+              <div className="space-y-1">
+                <Label>Seats</Label>
+                <Input type="number" value={form.seats} onChange={(e) => setForm({ ...form, seats: Number(e.target.value) })} />
+              </div>
+              <Button
+                className="bg-[#C41E3A] text-[#FFE566]"
+                onClick={async () => {
+                  await save("routes", form, `Saved route ${form.name}.`);
+                  setOpen(false);
+                }}
+              >
+                Save route
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Guard>
   );
 }

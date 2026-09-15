@@ -39,29 +39,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(160deg,#C41E3A_0%,#9B1B30_42%,#EAB308_100%)] px-4 py-8">
+    <div className="min-h-screen bg-[#FFE566] px-4 py-8 text-[#C41E3A]">
       <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <div className="text-white">
-          <p className="text-sm font-semibold tracking-[0.2em] text-[#FDE68A]">COLLEGE ERP</p>
+        <div>
+          <p className="text-sm font-bold tracking-[0.2em]">COLLEGE ERP</p>
           <h1 className="mt-2 text-4xl font-bold leading-tight md:text-5xl">GP Pharmacy College</h1>
-          <p className="mt-4 max-w-lg text-base text-white/90">
-            One simple place for students, parents, and staff. Check class, attendance, exam marks, fees,
-            library books, and bus routes. Get WhatsApp, SMS, email, and in-app alerts.
+          <p className="mt-4 max-w-lg text-base">
+            Full college ERP: student and staff files with photos, live department → course → section lists, timetable,
+            attendance, exams, fees with receipt, library, bus, alerts, and audit logs.
           </p>
-          <ul className="mt-6 grid gap-2 text-sm text-[#FFF3C4] sm:grid-cols-2">
-            <li>Student and staff records</li>
-            <li>Courses, departments, sections</li>
-            <li>Timetable and attendance</li>
-            <li>Exam marks and reports</li>
-            <li>Safe fee payment</li>
-            <li>Library and transport</li>
+          <ul className="mt-6 grid gap-2 text-sm sm:grid-cols-2">
+            <li>Full CRUD student and staff files + photos</li>
+            <li>Live department, course, section lists</li>
+            <li>Timetable editor, attendance, exams</li>
+            <li>Fees, receipts, library, bus</li>
+            <li>WhatsApp / SMS / email / in-app alerts</li>
+            <li>Reports and audit logs</li>
           </ul>
         </div>
 
-        <Card className="border-[#F0C94A] shadow-xl">
+        <Card className="border-2 border-[#C41E3A] bg-[#FFF8C2] shadow-xl">
           <CardHeader>
-            <CardTitle className="text-[#8B1528]">Sign in</CardTitle>
-            <CardDescription>Pick who you are, then use the demo password.</CardDescription>
+            <CardTitle>Sign in</CardTitle>
+            <CardDescription className="text-[#C41E3A]">Pick who you are, then use the password.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="mb-4 grid grid-cols-2 gap-2">

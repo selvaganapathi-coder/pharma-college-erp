@@ -1,9 +1,10 @@
 export type Role = "admin" | "staff" | "student" | "parent";
-
 export type Channel = "whatsapp" | "sms" | "email" | "inapp";
+export type Status = "active" | "left";
 
 export type User = {
   id: string;
+  uid?: string;
   email: string;
   password: string;
   name: string;
@@ -12,6 +13,7 @@ export type User = {
   staffId?: string;
   studentId?: string;
   childStudentId?: string;
+  photoUrl?: string;
   active: boolean;
 };
 
@@ -20,6 +22,8 @@ export type Department = {
   code: string;
   name: string;
   head: string;
+  phone?: string;
+  photoUrl?: string;
 };
 
 export type Course = {
@@ -29,6 +33,7 @@ export type Course = {
   departmentId: string;
   years: number;
   credits: number;
+  kind: "programme" | "subject";
 };
 
 export type Section = {
@@ -37,6 +42,7 @@ export type Section = {
   courseId: string;
   year: number;
   room: string;
+  capacity: number;
 };
 
 export type Student = {
@@ -46,6 +52,8 @@ export type Student = {
   email: string;
   phone: string;
   gender: "Female" | "Male";
+  dob: string;
+  bloodGroup: string;
   parentName: string;
   parentPhone: string;
   parentEmail: string;
@@ -54,7 +62,9 @@ export type Student = {
   sectionId: string;
   year: number;
   address: string;
-  status: "active" | "left";
+  admissionDate: string;
+  photoUrl?: string;
+  status: Status;
   busRouteId?: string;
 };
 
@@ -65,9 +75,12 @@ export type Staff = {
   email: string;
   phone: string;
   title: string;
+  qualification: string;
   departmentId: string;
+  courseIds: string[];
   joinedOn: string;
-  status: "active" | "left";
+  photoUrl?: string;
+  status: Status;
 };
 
 export type TimetableSlot = {
@@ -84,6 +97,7 @@ export type Attendance = {
   id: string;
   studentId: string;
   courseId: string;
+  sectionId: string;
   date: string;
   status: "present" | "absent" | "late";
   markedBy: string;
@@ -93,8 +107,10 @@ export type Exam = {
   id: string;
   name: string;
   courseId: string;
+  sectionId: string;
   date: string;
   maxMarks: number;
+  locked: boolean;
 };
 
 export type Mark = {
@@ -104,9 +120,19 @@ export type Mark = {
   marks: number;
 };
 
+export type FeePlan = {
+  id: string;
+  name: string;
+  courseId: string;
+  year: number;
+  amount: number;
+  dueDate: string;
+};
+
 export type Fee = {
   id: string;
   studentId: string;
+  planId?: string;
   term: string;
   amount: number;
   dueDate: string;
@@ -114,6 +140,7 @@ export type Fee = {
   paidAt?: string;
   method?: string;
   txnId?: string;
+  receiptNo?: string;
 };
 
 export type Notice = {
@@ -121,7 +148,9 @@ export type Notice = {
   title: string;
   body: string;
   channels: Channel[];
-  audience: Role[] | ["all"];
+  audience: string;
+  sectionId?: string;
+  studentId?: string;
   urgent: boolean;
   createdAt: string;
   createdBy: string;
@@ -136,6 +165,7 @@ export type Message = {
   urgent: boolean;
   fromUserId: string;
   audience: string;
+  sectionId?: string;
   createdAt: string;
 };
 
@@ -147,6 +177,7 @@ export type BusRoute = {
   driverPhone: string;
   stops: string;
   seats: number;
+  photoUrl?: string;
 };
 
 export type Book = {
@@ -155,6 +186,7 @@ export type Book = {
   title: string;
   author: string;
   copies: number;
+  photoUrl?: string;
 };
 
 export type Checkout = {
@@ -164,6 +196,7 @@ export type Checkout = {
   issuedOn: string;
   dueOn: string;
   returnedOn?: string;
+  fine?: number;
 };
 
 export type AuditLog = {
@@ -189,6 +222,7 @@ export type AppState = {
   attendance: Attendance[];
   exams: Exam[];
   marks: Mark[];
+  feePlans: FeePlan[];
   fees: Fee[];
   notices: Notice[];
   messages: Message[];
@@ -197,6 +231,29 @@ export type AppState = {
   checkouts: Checkout[];
   auditLogs: AuditLog[];
 };
+
+export const COLLECTION_KEYS = [
+  "users",
+  "departments",
+  "courses",
+  "sections",
+  "students",
+  "staff",
+  "timetable",
+  "attendance",
+  "exams",
+  "marks",
+  "feePlans",
+  "fees",
+  "notices",
+  "messages",
+  "routes",
+  "books",
+  "checkouts",
+  "auditLogs",
+] as const;
+
+export type CollectionKey = (typeof COLLECTION_KEYS)[number];
 
 export const EMPTY_STATE: AppState = {
   users: [],
@@ -209,6 +266,7 @@ export const EMPTY_STATE: AppState = {
   attendance: [],
   exams: [],
   marks: [],
+  feePlans: [],
   fees: [],
   notices: [],
   messages: [],
@@ -217,3 +275,6 @@ export const EMPTY_STATE: AppState = {
   checkouts: [],
   auditLogs: [],
 };
+
+export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export const PERIODS = ["9:00 AM", "10:00 AM", "11:15 AM", "12:15 PM", "2:00 PM", "3:00 PM"];

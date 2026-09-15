@@ -3,74 +3,77 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
+import { CourseSelect, SectionSelect } from "@/components/linked-selects";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/lib/app-context";
-import { uid } from "@/lib/storage";
-import { pick } from "@/lib/pick";
+import { uid } from "@/lib/store";
 import type { Attendance } from "@/lib/types";
 
 export default function AttendancePage() {
-  const { state, mutate, allowed, scopedStudentId } = useApp();
+  const { state, save, allowed, scopedStudentId, user } = useApp();
   const sid = scopedStudentId();
   const [sectionId, setSectionId] = useState(
     sid ? state.students.find((s) => s.id === sid)?.sectionId ?? "s1" : "s1",
   );
-  const [date, setDate] = useState("2026-09-12");
+  const [courseId, setCourseId] = useState("c4");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const students = useMemo(
-    () => state.students.filter((s) => s.sectionId === sectionId && (!sid || s.id === sid)),
+    () => state.students.filter((s) => s.sectionId === sectionId && s.status === "active" && (!sid || s.id === sid)),
     [state.students, sectionId, sid],
   );
   const canWrite = allowed("attendance", "write") && !sid;
+  const section = state.sections.find((s) => s.id === sectionId);
+  const programme = state.courses.find((c) => c.id === section?.courseId);
 
-  function statusOf(studentId: string) {
-    return state.attendance.find((a) => a.studentId === studentId && a.date === date)?.status ?? "present";
+  function statusOf(studentId: string): Attendance["status"] {
+    return (
+      state.attendance.find((a) => a.studentId === studentId && a.date === date && a.courseId === courseId)?.status ??
+      "present"
+    );
   }
 
-  function setStatus(studentId: string, status: Attendance["status"]) {
-    mutate((draft) => {
-      const existing = draft.attendance.find((a) => a.studentId === studentId && a.date === date);
-      if (existing) existing.status = status;
-      else {
-        draft.attendance.push({
-          id: uid("att"),
-          studentId,
-          courseId: "c4",
-          date,
-          status,
-          markedBy: "t1",
-        });
-      }
-      return `Marked ${studentId} ${status} on ${date}.`;
-    }, "attendance", studentId);
+  async function setStatus(studentId: string, status: Attendance["status"]) {
+    const existing = state.attendance.find((a) => a.studentId === studentId && a.date === date && a.courseId === courseId);
+    await save(
+      "attendance",
+      {
+        id: existing?.id ?? uid("att"),
+        studentId,
+        courseId,
+        sectionId,
+        date,
+        status,
+        markedBy: user?.staffId ?? user?.id ?? "t1",
+      },
+      `Marked attendance ${status} for ${studentId} on ${date}.`,
+    );
   }
 
   return (
     <Guard module="attendance">
       <PageHeader
         title="Attendance"
-        note="Mark who came to class. Students and parents can only view their own days."
+        note="Pick section, then subject paper, then date. Mark present, late, or absent. Parents and students only view."
       />
-      <div className="mb-4 flex flex-wrap gap-3">
-        <Select value={sectionId} onValueChange={pick(setSectionId)}>
-          <SelectTrigger className="w-48 bg-white">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {state.sections.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="h-9 rounded-lg border border-[#F0C94A] bg-white px-3 text-sm"
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />
+        <CourseSelect
+          courses={state.courses}
+          departmentId={programme?.departmentId}
+          kind="subject"
+          value={courseId}
+          onChange={setCourseId}
         />
+        <div>
+          <label className="mb-1 block text-sm font-medium">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-9 w-full rounded-lg border-2 border-[#C41E3A] bg-white px-3 text-sm text-[#C41E3A]"
+          />
+        </div>
       </div>
       <div className="space-y-2">
         {students.map((st) => {
@@ -78,11 +81,17 @@ export default function AttendancePage() {
           return (
             <div
               key={st.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F0C94A] bg-white p-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2] p-3"
             >
-              <div>
-                <p className="font-medium">{st.name}</p>
-                <p className="text-xs text-[#6B4A1F]">{st.rollNo}</p>
+              <div className="flex items-center gap-3">
+                {st.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={st.photoUrl} alt="" className="size-10 rounded object-cover" />
+                ) : null}
+                <div>
+                  <p className="font-semibold">{st.name}</p>
+                  <p className="text-xs">{st.rollNo}</p>
+                </div>
               </div>
               {canWrite ? (
                 <div className="flex gap-2">
@@ -91,17 +100,15 @@ export default function AttendancePage() {
                       key={s}
                       size="sm"
                       variant={status === s ? "default" : "outline"}
-                      className={status === s ? "bg-[#C41E3A] text-white" : ""}
-                      onClick={() => setStatus(st.id, s)}
+                      className={status === s ? "bg-[#C41E3A] text-[#FFE566]" : "border-[#C41E3A] text-[#C41E3A]"}
+                      onClick={() => void setStatus(st.id, s)}
                     >
                       {s}
                     </Button>
                   ))}
                 </div>
               ) : (
-                <Badge className={status === "present" ? "bg-[#EAB308] text-[#4A1C1C]" : "bg-[#C41E3A]"}>
-                  {status}
-                </Badge>
+                <Badge className="bg-[#C41E3A] text-[#FFE566]">{status}</Badge>
               )}
             </div>
           );

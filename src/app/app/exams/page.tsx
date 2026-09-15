@@ -3,54 +3,101 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
-import { SearchTable } from "@/components/search-table";
+import { DataTable } from "@/components/data-table";
+import { CourseSelect, SectionSelect } from "@/components/linked-selects";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
-import { pick } from "@/lib/pick";
+import { uid } from "@/lib/store";
+import type { Exam } from "@/lib/types";
 
 export default function ExamsPage() {
-  const { state, mutate, allowed, scopedStudentId } = useApp();
+  const { state, save, remove, allowed, scopedStudentId } = useApp();
   const sid = scopedStudentId();
-  const [examId, setExamId] = useState(state.exams[0]?.id ?? "e1");
-  const exam = state.exams.find((e) => e.id === examId);
   const canWrite = allowed("exams", "write") && !sid;
+  const [examId, setExamId] = useState(state.exams[0]?.id ?? "");
+  const exam = state.exams.find((e) => e.id === examId) ?? state.exams[0];
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Exam | null>(null);
 
   const rows = useMemo(() => {
-    const list = sid ? state.students.filter((s) => s.id === sid) : state.students;
+    const list = sid ? state.students.filter((s) => s.id === sid) : state.students.filter((s) => !exam || s.sectionId === exam.sectionId);
     return list.map((st) => {
-      const mark = state.marks.find((m) => m.examId === examId && m.studentId === st.id);
+      const mark = state.marks.find((m) => m.examId === exam?.id && m.studentId === st.id);
       const score = mark?.marks ?? 0;
       const max = exam?.maxMarks ?? 30;
-      const pct = Math.round((score / max) * 100);
+      const pct = max ? Math.round((score / max) * 100) : 0;
       const grade = pct >= 75 ? "A" : pct >= 60 ? "B" : pct >= 40 ? "C" : "F";
-      return { ...st, score, grade, pct };
+      return { ...st, score, grade, pct, markId: mark?.id };
     });
-  }, [state.students, state.marks, examId, exam, sid]);
+  }, [state.students, state.marks, exam, sid]);
 
   return (
     <Guard module="exams">
       <PageHeader
         title="Exam marks"
-        note="Staff enter marks. The grade is made from the score. Students see only their own papers."
+        note="Create a paper for a section and subject. Enter marks. Lock the paper when the list is final. Students see only their marks."
+        action={
+          canWrite ? (
+            <Button
+              className="bg-[#C41E3A] text-[#FFE566]"
+              onClick={() => {
+                setForm({
+                  id: uid("e"),
+                  name: "",
+                  courseId: state.courses.find((c) => c.kind === "subject")?.id ?? "",
+                  sectionId: state.sections[0]?.id ?? "",
+                  date: new Date().toISOString().slice(0, 10),
+                  maxMarks: 30,
+                  locked: false,
+                });
+                setOpen(true);
+              }}
+            >
+              New exam
+            </Button>
+          ) : null
+        }
       />
-      <div className="mb-4 max-w-md">
-        <Select value={examId} onValueChange={pick(setExamId)}>
-          <SelectTrigger className="bg-white">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {state.exams.map((e) => (
-              <SelectItem key={e.id} value={e.id}>
-                {e.name} · {e.date} · {e.maxMarks} marks
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {state.exams.map((e) => (
+          <Button
+            key={e.id}
+            size="sm"
+            className={e.id === (exam?.id ?? examId) ? "bg-[#C41E3A] text-[#FFE566]" : ""}
+            variant={e.id === (exam?.id ?? examId) ? "default" : "outline"}
+            onClick={() => setExamId(e.id)}
+          >
+            {e.name}
+            {e.locked ? " · locked" : ""}
+          </Button>
+        ))}
       </div>
-      <SearchTable
+      {exam ? (
+        <p className="mb-3 text-sm">
+          {exam.date} · {state.courses.find((c) => c.id === exam.courseId)?.name} · max {exam.maxMarks}
+          {canWrite ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-2 border-[#C41E3A] text-[#C41E3A]"
+              onClick={() => void save("exams", { ...exam, locked: !exam.locked }, exam.locked ? "Unlocked exam." : "Locked exam.")}
+            >
+              {exam.locked ? "Unlock" : "Lock paper"}
+            </Button>
+          ) : null}
+          {canWrite ? (
+            <Button size="sm" variant="ghost" className="text-[#C41E3A]" onClick={() => void remove("exams", exam.id, `Deleted exam ${exam.name}.`)}>
+              Delete exam
+            </Button>
+          ) : null}
+        </p>
+      ) : null}
+      <DataTable
         rows={rows}
-        empty="No marks for this paper."
+        empty="No students for this paper."
         filter={(row, q) => !q || `${row.name} ${row.rollNo}`.toLowerCase().includes(q)}
         columns={[
           { key: "roll", header: "Roll no.", cell: (r) => r.rollNo },
@@ -59,19 +106,18 @@ export default function ExamsPage() {
             key: "marks",
             header: "Marks",
             cell: (r) =>
-              canWrite ? (
+              canWrite && exam && !exam.locked ? (
                 <Input
-                  className="w-24"
+                  className="w-24 bg-white"
                   type="number"
                   defaultValue={r.score}
                   onBlur={(e) => {
                     const value = Number(e.target.value);
-                    mutate((draft) => {
-                      const found = draft.marks.find((m) => m.examId === examId && m.studentId === r.id);
-                      if (found) found.marks = value;
-                      else draft.marks.push({ id: `m-${r.id}-${examId}`, examId, studentId: r.id, marks: value });
-                      return `Set marks for ${r.name} to ${value}.`;
-                    }, "marks", r.id);
+                    void save(
+                      "marks",
+                      { id: r.markId ?? uid("m"), examId: exam.id, studentId: r.id, marks: value },
+                      `Set marks for ${r.name} to ${value}.`,
+                    );
                   }}
                 />
               ) : (
@@ -82,9 +128,53 @@ export default function ExamsPage() {
           { key: "pct", header: "%", cell: (r) => `${r.pct}%` },
         ]}
       />
-      {canWrite ? (
-        <p className="mt-3 text-xs text-[#6B4A1F]">Change a mark and click outside the box to save. This writes an audit log.</p>
-      ) : null}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="bg-[#FFF8C2]">
+          <DialogHeader>
+            <DialogTitle className="text-[#C41E3A]">New exam</DialogTitle>
+          </DialogHeader>
+          {form ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <SectionSelect
+                sections={state.sections}
+                value={form.sectionId}
+                onChange={(id) => setForm({ ...form, sectionId: id })}
+              />
+              <CourseSelect
+                courses={state.courses}
+                kind="subject"
+                value={form.courseId}
+                onChange={(id) => setForm({ ...form, courseId: id })}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label>Date</Label>
+                  <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Max marks</Label>
+                  <Input type="number" value={form.maxMarks} onChange={(e) => setForm({ ...form, maxMarks: Number(e.target.value) })} />
+                </div>
+              </div>
+              <Button
+                className="bg-[#C41E3A] text-[#FFE566]"
+                disabled={!form.name}
+                onClick={async () => {
+                  await save("exams", form, `Created exam ${form.name}.`);
+                  setExamId(form.id);
+                  setOpen(false);
+                }}
+              >
+                Save exam
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Guard>
   );
 }

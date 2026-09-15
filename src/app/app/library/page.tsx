@@ -3,31 +3,29 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
-import { SearchTable } from "@/components/search-table";
+import { DataTable } from "@/components/data-table";
+import { PhotoUpload } from "@/components/photo-upload";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApp } from "@/lib/app-context";
-import { uid } from "@/lib/storage";
+import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
+import type { Book } from "@/lib/types";
 
 export default function LibraryPage() {
-  const { state, mutate, allowed, scopedStudentId } = useApp();
+  const { state, save, remove, allowed, scopedStudentId, upload } = useApp();
   const sid = scopedStudentId();
   const canWrite = allowed("library", "write") && !sid;
   const [bookOpen, setBookOpen] = useState(false);
   const [outOpen, setOutOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [author, setAuthor] = useState("");
-  const [isbn, setIsbn] = useState("");
-  const [copies, setCopies] = useState("1");
+  const [form, setForm] = useState<Book | null>(null);
   const [bookId, setBookId] = useState(state.books[0]?.id ?? "");
   const [studentId, setStudentId] = useState(state.students[0]?.id ?? "");
-
   const checkouts = sid ? state.checkouts.filter((c) => c.studentId === sid) : state.checkouts;
 
   function copiesLeft(id: string) {
@@ -40,115 +38,23 @@ export default function LibraryPage() {
     <Guard module="library">
       <PageHeader
         title="Library"
-        note="Track books and student checkouts. Staff can issue and return. Students see only their books."
+        note="Book catalogue with cover photo, copies, issue, return, and fine after due date."
         action={
           canWrite ? (
             <div className="flex gap-2">
-              <Dialog open={bookOpen} onOpenChange={setBookOpen}>
-                <DialogTrigger render={<Button variant="outline" />}>Add book</DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>New book</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <Label>Title</Label>
-                      <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Author</Label>
-                      <Input value={author} onChange={(e) => setAuthor(e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>ISBN</Label>
-                      <Input value={isbn} onChange={(e) => setIsbn(e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Copies</Label>
-                      <Input value={copies} onChange={(e) => setCopies(e.target.value)} />
-                    </div>
-                    <Button
-                      className="bg-[#C41E3A] text-white"
-                      onClick={() => {
-                        mutate((draft) => {
-                          draft.books.push({
-                            id: uid("b"),
-                            title,
-                            author,
-                            isbn,
-                            copies: Number(copies) || 1,
-                          });
-                          return `Added book ${title}.`;
-                        }, "library", isbn);
-                        setBookOpen(false);
-                      }}
-                    >
-                      Save book
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <Dialog open={outOpen} onOpenChange={setOutOpen}>
-                <DialogTrigger render={<Button className="bg-[#C41E3A] text-white" />}>Issue book</DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Issue to student</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <Label>Book</Label>
-                      <Select value={bookId} onValueChange={pick(setBookId)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {state.books.map((b) => (
-                            <SelectItem key={b.id} value={b.id}>
-                              {b.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Student</Label>
-                      <Select value={studentId} onValueChange={pick(setStudentId)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {state.students.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name} ({s.rollNo})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button
-                      className="bg-[#C41E3A] text-white"
-                      onClick={() => {
-                        const issuedOn = new Date().toISOString().slice(0, 10);
-                        const due = new Date();
-                        due.setDate(due.getDate() + 14);
-                        mutate((draft) => {
-                          draft.checkouts.unshift({
-                            id: uid("ch"),
-                            bookId,
-                            studentId,
-                            issuedOn,
-                            dueOn: due.toISOString().slice(0, 10),
-                          });
-                          return `Issued book ${bookId} to ${studentId}.`;
-                        }, "checkouts", studentId);
-                        setOutOpen(false);
-                      }}
-                    >
-                      Issue for 14 days
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button
+                variant="outline"
+                className="border-[#C41E3A] text-[#C41E3A]"
+                onClick={() => {
+                  setForm({ id: uid("b"), isbn: "", title: "", author: "", copies: 1 });
+                  setBookOpen(true);
+                }}
+              >
+                Add book
+              </Button>
+              <Button className="bg-[#C41E3A] text-[#FFE566]" onClick={() => setOutOpen(true)}>
+                Issue book
+              </Button>
             </div>
           ) : null
         }
@@ -159,11 +65,28 @@ export default function LibraryPage() {
           <TabsTrigger value="out">Checkouts</TabsTrigger>
         </TabsList>
         <TabsContent value="books">
-          <SearchTable
+          <DataTable
             rows={state.books}
-            empty="No books in the catalogue."
+            empty="No books."
+            canWrite={canWrite}
             filter={(row, q) => !q || `${row.title} ${row.author} ${row.isbn}`.toLowerCase().includes(q)}
+            onEdit={(r) => {
+              setForm(r);
+              setBookOpen(true);
+            }}
+            onDelete={(r) => void remove("books", r.id, `Deleted book ${r.title}.`)}
             columns={[
+              {
+                key: "cover",
+                header: "Cover",
+                cell: (r) =>
+                  r.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.photoUrl} alt="" className="h-12 w-9 object-cover" />
+                  ) : (
+                    "—"
+                  ),
+              },
               { key: "title", header: "Title", cell: (r) => r.title },
               { key: "author", header: "Author", cell: (r) => r.author },
               { key: "isbn", header: "ISBN", cell: (r) => r.isbn },
@@ -172,7 +95,7 @@ export default function LibraryPage() {
           />
         </TabsContent>
         <TabsContent value="out">
-          <SearchTable
+          <DataTable
             rows={checkouts}
             empty="No checkouts."
             filter={(row, q) => {
@@ -187,34 +110,142 @@ export default function LibraryPage() {
               {
                 key: "status",
                 header: "Status",
-                cell: (r) =>
-                  r.returnedOn ? (
-                    <Badge className="bg-[#EAB308] text-[#4A1C1C]">Returned {r.returnedOn}</Badge>
+                cell: (r) => {
+                  const late = !r.returnedOn && r.dueOn < new Date().toISOString().slice(0, 10);
+                  const fine = late ? 20 : 0;
+                  return r.returnedOn ? (
+                    <Badge className="bg-[#C41E3A] text-[#FFE566]">Returned {r.returnedOn}</Badge>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-[#C41E3A]">Out</Badge>
+                      <Badge className="bg-[#C41E3A] text-[#FFE566]">{late ? `Overdue · ₹${fine}` : "Out"}</Badge>
                       {canWrite ? (
                         <Button
                           size="sm"
                           variant="outline"
+                          className="border-[#C41E3A] text-[#C41E3A]"
                           onClick={() =>
-                            mutate((draft) => {
-                              const found = draft.checkouts.find((c) => c.id === r.id);
-                              if (found) found.returnedOn = new Date().toISOString().slice(0, 10);
-                              return `Returned checkout ${r.id}.`;
-                            }, "checkouts", r.id)
+                            void save(
+                              "checkouts",
+                              { ...r, returnedOn: new Date().toISOString().slice(0, 10), fine },
+                              `Returned book checkout ${r.id}.`,
+                            )
                           }
                         >
                           Return
                         </Button>
                       ) : null}
                     </div>
-                  ),
+                  );
+                },
               },
             ]}
           />
         </TabsContent>
       </Tabs>
+      <Dialog open={bookOpen} onOpenChange={setBookOpen}>
+        <DialogContent className="bg-[#FFF8C2]">
+          <DialogHeader>
+            <DialogTitle className="text-[#C41E3A]">Book</DialogTitle>
+          </DialogHeader>
+          {form ? (
+            <div className="space-y-3">
+              <PhotoUpload
+                label="Cover photo"
+                value={form.photoUrl}
+                onChange={(url) => setForm({ ...form, photoUrl: url })}
+                onFile={(file) => upload("books", form.id, file)}
+              />
+              <div className="space-y-1">
+                <Label>Title</Label>
+                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Author</Label>
+                <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label>ISBN</Label>
+                  <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Copies</Label>
+                  <Input type="number" value={form.copies} onChange={(e) => setForm({ ...form, copies: Number(e.target.value) })} />
+                </div>
+              </div>
+              <Button
+                className="bg-[#C41E3A] text-[#FFE566]"
+                onClick={async () => {
+                  await save("books", form, `Saved book ${form.title}.`);
+                  setBookOpen(false);
+                }}
+              >
+                Save book
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={outOpen} onOpenChange={setOutOpen}>
+        <DialogContent className="bg-[#FFF8C2]">
+          <DialogHeader>
+            <DialogTitle className="text-[#C41E3A]">Issue book</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Book</Label>
+              <Select value={bookId} onValueChange={pick(setBookId)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {state.books.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Student</Label>
+              <Select value={studentId} onValueChange={pick(setStudentId)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {state.students.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              className="bg-[#C41E3A] text-[#FFE566]"
+              onClick={async () => {
+                const due = new Date();
+                due.setDate(due.getDate() + 14);
+                await save(
+                  "checkouts",
+                  {
+                    id: uid("ch"),
+                    bookId,
+                    studentId,
+                    issuedOn: new Date().toISOString().slice(0, 10),
+                    dueOn: due.toISOString().slice(0, 10),
+                  },
+                  `Issued book ${bookId} to ${studentId}.`,
+                );
+                setOutOpen(false);
+              }}
+            >
+              Issue for 14 days
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Guard>
   );
 }

@@ -2,7 +2,7 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
-import { SearchTable } from "@/components/search-table";
+import { DataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/lib/app-context";
 
@@ -12,14 +12,12 @@ export default function AuditPage() {
     <Guard module="audit">
       <PageHeader
         title="Audit logs"
-        note="Every admin and staff change is saved here. This helps security checks and honest records. Offline actions are tagged."
+        note="Every add, edit, delete, login, and payment is stored. Offline actions are tagged."
       />
-      <SearchTable
+      <DataTable
         rows={state.auditLogs}
         empty="No logs yet."
-        filter={(row, q) =>
-          !q || `${row.actorName} ${row.action} ${row.entity} ${row.details}`.toLowerCase().includes(q)
-        }
+        filter={(row, q) => !q || `${row.actorName} ${row.action} ${row.entity} ${row.details}`.toLowerCase().includes(q)}
         columns={[
           { key: "at", header: "When", cell: (r) => new Date(r.at).toLocaleString() },
           { key: "who", header: "Who", cell: (r) => r.actorName },
@@ -29,11 +27,7 @@ export default function AuditPage() {
           {
             key: "net",
             header: "Network",
-            cell: (r) => (
-              <Badge className={r.online ? "bg-[#EAB308] text-[#4A1C1C]" : "bg-[#C41E3A]"}>
-                {r.online ? "Online" : "Offline"}
-              </Badge>
-            ),
+            cell: (r) => <Badge className="bg-[#C41E3A] text-[#FFE566]">{r.online ? "Online" : "Offline"}</Badge>,
           },
         ]}
       />
