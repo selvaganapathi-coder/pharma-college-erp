@@ -29,19 +29,18 @@ Open http://localhost:43123
 
 ### First login
 
-1. Open the site. If no accounts exist, create the **college admin** with your office email and a password of at least 8 characters.
-2. Add departments, programmes, sections, then staff and students.
-3. Optional portal passwords on student/staff forms create their sign-in.
-
-Old sample accounts (`admin@gppharmacy.edu` and similar) are stripped on load.
+1. Open **Sign in** if you already created an admin. Use **Create the admin account** only once.
+2. After that, the same email works on any browser once Firebase Auth is on.
+3. Add departments, programmes, sections, then staff and students. Optional portal passwords create staff/student/parent sign-in.
 
 ## Firebase (pharmacy-98684)
 
-1. Authentication → enable Email/Password
-2. Create Firestore and Storage
-3. Publish `firestore.rules` and `storage.rules`
+1. Authentication → enable **Email/Password**
+2. Authentication → Settings → **Authorized domains** — add `localhost` and your live site (Vercel domain)
+3. Create Firestore and Storage
+4. Publish `firestore.rules` and `storage.rules`
 
-Put the web config in `.env.local`. First admin sign-in writes collections (`students`, `staff`, `departments`, …).
+If Email/Password is off, or this site is not in Authorized domains, the admin is stored only in that browser and the create-admin screen appears again on the next device or preview URL.
 
 ## Live keys (optional)
 

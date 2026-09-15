@@ -12,7 +12,7 @@ export default function LoginPage() {
   const { ready, user, login, registerAdmin, needsSetup } = useApp();
   const router = useRouter();
   const [mode, setMode] = useState<"in" | "setup">("in");
-  const view = needsSetup ? "setup" : mode;
+  const view = mode;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -67,7 +67,9 @@ export default function LoginPage() {
             <CardDescription>
               {view === "setup"
                 ? "This first account controls the college ERP. Use your real office email."
-                : "Use the email and password created for you by the college office."}
+                : needsSetup
+                  ? "If you already created an admin, sign in here. This browser may be empty until cloud login succeeds."
+                  : "Use the email and password created for you by the college office."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -104,18 +106,16 @@ export default function LoginPage() {
               <Button type="submit" disabled={busy} className="w-full">
                 {busy ? "Please wait…" : view === "setup" ? "Create admin and open ERP" : "Sign in"}
               </Button>
-              {!needsSetup ? (
-                <button
-                  type="button"
-                  className="w-full text-center text-xs text-muted-foreground underline"
-                  onClick={() => {
-                    setMode(view === "setup" ? "in" : "setup");
-                    setError(null);
-                  }}
-                >
-                  {view === "setup" ? "Already have an account? Sign in" : "First time? Create the admin account"}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="w-full text-center text-xs text-muted-foreground underline"
+                onClick={() => {
+                  setMode(view === "setup" ? "in" : "setup");
+                  setError(null);
+                }}
+              >
+                {view === "setup" ? "Already have an account? Sign in" : "First time? Create the admin account"}
+              </button>
             </form>
           </CardContent>
         </Card>

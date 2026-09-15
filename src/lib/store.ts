@@ -5,7 +5,7 @@ import { collection, doc, getDocs, onSnapshot, setDoc, deleteDoc } from "firebas
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import type { AppState, AuditLog, CollectionKey } from "./types";
 import { COLLECTION_KEYS, EMPTY_STATE } from "./types";
-import { isSampleId, SAMPLE_EMAILS } from "./seed";
+import { isSampleRecord } from "./seed";
 import { getFirebase } from "./firebase";
 
 const DB_NAME = "gp-pharmacy-erp-v3";
@@ -38,11 +38,7 @@ export function stripSample(state: AppState): AppState {
   const next = { ...EMPTY_STATE } as AppState;
   for (const key of COLLECTION_KEYS) {
     const rows = state[key] as { id: string; email?: string }[];
-    (next[key] as unknown[]) = rows.filter((row) => {
-      if (isSampleId(row.id)) return false;
-      if (row.email && SAMPLE_EMAILS.has(row.email.toLowerCase())) return false;
-      return true;
-    });
+    (next[key] as unknown[]) = rows.filter((row) => !isSampleRecord(row));
   }
   return next;
 }
@@ -88,6 +84,51 @@ export async function persistLocal(state: AppState) {
   await (await db()).put(STORE, clean(state), STATE_KEY);
 }
 
+export async function hydrateFromCloud(): Promise<Partial<AppState> | null> {
+  const fb = getFirebase();
+  if (!fb?.auth.currentUser) return null;
+  try {
+    const patch: Partial<AppState> = {};
+    for (const key of COLLECTION_KEYS) {
+      const snap = await getDocs(collection(fb.db, key));
+      const rows = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((row) => !isSampleRecord(row as { id: string; email?: string }));
+      (patch as Record<string, unknown>)[key] = rows;
+    }
+    return patch;
+  } catch {
+    return null;
+  }
+}
+
+export function mergeCloud(local: AppState, cloud: Partial<AppState>): AppState {
+  const next = { ...local };
+  for (const key of COLLECTION_KEYS) {
+    const rows = cloud[key];
+    if (Array.isArray(rows) && rows.length > 0) {
+      (next[key] as AppState[typeof key]) = rows as AppState[typeof key];
+    }
+  }
+  return next;
+}
+
+export async function pushMissingToCloud(state: AppState) {
+  const fb = getFirebase();
+  if (!fb?.auth.currentUser) return;
+  try {
+    for (const key of COLLECTION_KEYS) {
+      const snap = await getDocs(collection(fb.db, key));
+      if (!snap.empty) continue;
+      for (const row of state[key] as { id: string }[]) {
+        await setDoc(doc(fb.db, key, row.id), clean(row));
+      }
+    }
+  } catch {
+    /* rules or offline */
+  }
+}
+
 export async function writeRow<K extends CollectionKey>(key: K, row: AppState[K][number]) {
   const item = clean(row) as AppState[K][number] & { id: string };
   const fb = getFirebase();
@@ -119,7 +160,7 @@ export async function purgeSampleFromCloud() {
       const snap = await getDocs(collection(fb.db, key));
       for (const d of snap.docs) {
         const email = (d.data() as { email?: string }).email;
-        if (isSampleId(d.id) || (email && SAMPLE_EMAILS.has(email.toLowerCase()))) {
+        if (isSampleRecord({ id: d.id, email })) {
           await deleteDoc(d.ref);
         }
       }
@@ -136,12 +177,7 @@ export function listenAll(onChange: (key: CollectionKey, rows: AppState[Collecti
     onSnapshot(collection(fb.db, key), (snap) => {
       const rows = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((row) => {
-          const email = (row as { email?: string }).email;
-          if (isSampleId(row.id)) return false;
-          if (email && SAMPLE_EMAILS.has(email.toLowerCase())) return false;
-          return true;
-        }) as AppState[CollectionKey];
+        .filter((row) => !isSampleRecord(row as { id: string; email?: string })) as AppState[CollectionKey];
       onChange(key, rows);
     }),
   );

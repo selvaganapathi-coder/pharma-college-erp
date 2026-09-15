@@ -9,14 +9,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import type { AppState, CollectionKey, Role, User } from "@/lib/types";
 import { EMPTY_STATE } from "@/lib/types";
 import {
+  hydrateFromCloud,
   listenAll,
   loadState,
   makeAudit,
+  mergeCloud,
   persistLocal,
   purgeSampleFromCloud,
+  pushMissingToCloud,
   readSession,
   removeRow,
   saveSession,
@@ -25,7 +29,7 @@ import {
   writeRow,
 } from "@/lib/store";
 import { can, type ModuleKey } from "@/lib/rbac";
-import { firebaseSignIn, firebaseSignOut } from "@/lib/firebase";
+import { firebaseSignIn, firebaseSignOut, getFirebase } from "@/lib/firebase";
 
 type AppContextValue = {
   ready: boolean;
@@ -57,27 +61,89 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    loadState().then((loaded) => {
-      if (!alive) return;
-      setState(loaded);
-      setUserId(readSession());
-      setReady(true);
-    });
+    let unsubLive: () => void = () => undefined;
+    let unsubAuth: () => void = () => undefined;
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
-    const unsubLive = listenAll((key, rows) => {
-      if (!alive || !rows.length) return;
-      setState((prev) => {
-        const next = { ...prev, [key]: rows };
-        void persistLocal(next);
-        return next;
+
+    function attachLive() {
+      unsubLive();
+      unsubLive = listenAll((key, rows) => {
+        if (!alive || !rows.length) return;
+        setState((prev) => {
+          const next = { ...prev, [key]: rows };
+          void persistLocal(next);
+          return next;
+        });
       });
-    });
+    }
+
+    async function applyCloud(local: AppState) {
+      const fb = getFirebase();
+      const cloud = await hydrateFromCloud();
+      if (!alive) return local;
+      let merged = cloud ? mergeCloud(local, cloud) : local;
+      const email = fb?.auth.currentUser?.email?.toLowerCase();
+      if (email && !merged.users.some((u) => u.email.toLowerCase() === email)) {
+        const account: User = {
+          id: uid("u"),
+          email,
+          password: "",
+          name: email.split("@")[0],
+          role: merged.users.length === 0 ? "admin" : "staff",
+          phone: "",
+          active: true,
+          uid: fb?.auth.currentUser?.uid,
+        };
+        merged = { ...merged, users: [account, ...merged.users] };
+        await writeRow("users", account);
+      }
+      setState(merged);
+      void persistLocal(merged);
+      const match = email ? merged.users.find((u) => u.email.toLowerCase() === email && u.active) : undefined;
+      if (match) {
+        setUserId(match.id);
+        saveSession(match.id);
+      }
+      await pushMissingToCloud(merged);
+      return merged;
+    }
+
+    void (async () => {
+      try {
+        const loaded = await loadState();
+        if (!alive) return;
+        setState(loaded);
+        setUserId(readSession());
+
+        const fb = getFirebase();
+        if (!fb) {
+          setReady(true);
+          return;
+        }
+        await fb.auth.authStateReady();
+        if (!alive) return;
+        if (fb.auth.currentUser) {
+          await applyCloud(loaded);
+          attachLive();
+        }
+        unsubAuth = onAuthStateChanged(fb.auth, (fbUser) => {
+          if (!alive || !fbUser) return;
+          void loadState()
+            .then((local) => applyCloud(local))
+            .then(() => attachLive());
+        });
+      } finally {
+        if (alive) setReady(true);
+      }
+    })();
+
     return () => {
       alive = false;
       unsubLive();
+      unsubAuth();
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
@@ -132,38 +198,105 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const found = state.users.find(
-        (u) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password && u.active,
-      );
-      if (!found) return "Email or password is wrong.";
-      const fb = await firebaseSignIn(found.email, password);
+      const address = email.trim().toLowerCase();
+      const fb = await firebaseSignIn(address, password);
       setFirebaseNote(fb.note);
+      const signedIn = Boolean(getFirebase()?.auth.currentUser);
+
+      let users = state.users;
+      if (signedIn) {
+        const cloud = await hydrateFromCloud();
+        if (cloud) {
+          const merged = mergeCloud(state, cloud);
+          setState(merged);
+          void persistLocal(merged);
+          users = merged.users;
+          await pushMissingToCloud(merged);
+        }
+      }
+
+      let found = users.find((u) => u.email.toLowerCase() === address && u.active) ?? null;
+      if (found && !signedIn && found.password !== password) {
+        return "Email or password is wrong.";
+      }
+      if (!found && signedIn) {
+        found = {
+          id: uid("u"),
+          email: address,
+          password,
+          name: address.split("@")[0],
+          role: users.length === 0 ? "admin" : "staff",
+          phone: "",
+          active: true,
+          uid: getFirebase()?.auth.currentUser?.uid,
+        };
+        setState((prev) => {
+          const next = { ...prev, users: [found!, ...prev.users] };
+          void persistLocal(next);
+          return next;
+        });
+        await writeRow("users", found);
+      }
+      if (!found) {
+        found =
+          state.users.find((u) => u.email.toLowerCase() === address && u.password === password && u.active) ?? null;
+      }
+      if (!found) return "Email or password is wrong.";
+      if (signedIn && password && found.password !== password) {
+        found = { ...found, password };
+        setState((prev) => {
+          const next = { ...prev, users: prev.users.map((u) => (u.id === found!.id ? found! : u)) };
+          void persistLocal(next);
+          return next;
+        });
+        await writeRow("users", found);
+      }
       setUserId(found.id);
       saveSession(found.id);
       if (fb.ok) await purgeSampleFromCloud();
       await audit("login", "session", found.id, `${found.role} signed in.`);
       return null;
     },
-    [audit, state.users],
+    [audit, state],
   );
 
   const registerAdmin = useCallback(
     async (input: { name: string; email: string; password: string; phone: string }) => {
-      if (state.users.length > 0) return "An admin already exists. Please sign in.";
       if (!input.name.trim() || !input.email.trim() || input.password.length < 8) {
         return "Enter your name, email, and a password of at least 8 characters.";
       }
+      const address = input.email.trim().toLowerCase();
+      const fb = await firebaseSignIn(address, input.password);
+      setFirebaseNote(fb.note);
+
+      if (getFirebase()?.auth.currentUser) {
+        const cloud = await hydrateFromCloud();
+        if (cloud?.users && cloud.users.length > 0) {
+          const merged = mergeCloud(state, cloud);
+          setState(merged);
+          void persistLocal(merged);
+          const existing = merged.users.find((u) => u.email.toLowerCase() === address && u.active);
+          if (existing) {
+            setUserId(existing.id);
+            saveSession(existing.id);
+            return null;
+          }
+          return "An admin already exists. Please sign in with that email.";
+        }
+      }
+
+      if (state.users.length > 0) return "An admin already exists. Please sign in.";
+
       const account: User = {
         id: uid("u"),
-        email: input.email.trim().toLowerCase(),
+        email: address,
         password: input.password,
         name: input.name.trim(),
         role: "admin",
         phone: input.phone.trim(),
         active: true,
+        uid: getFirebase()?.auth.currentUser?.uid,
       };
-      const fb = await firebaseSignIn(account.email, account.password);
-      setFirebaseNote(fb.note);
       setState((prev) => {
         const next = { ...prev, users: [account, ...prev.users] };
         void persistLocal(next);
@@ -173,9 +306,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUserId(account.id);
       saveSession(account.id);
       if (fb.ok) await purgeSampleFromCloud();
+      if (!getFirebase()?.auth.currentUser) {
+        setFirebaseNote(
+          "Admin is saved on this browser only. Turn on Email/Password in Firebase Auth and add this site to Authorized domains so the account is kept.",
+        );
+      }
       return null;
     },
-    [state.users.length],
+    [state],
   );
 
   const logout = useCallback(() => {

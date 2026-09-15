@@ -29,3 +29,10 @@ export function isSampleId(id: string) {
   if (id.startsWith("f-st")) return true;
   return false;
 }
+
+export function isSampleRecord(row: { id: string; email?: string }) {
+  if (isSampleId(row.id)) return true;
+  // Only drop the old demo emails when they still sit on the old demo ids.
+  if (row.email && SAMPLE_EMAILS.has(row.email.toLowerCase()) && isSampleId(row.id)) return true;
+  return false;
+}
