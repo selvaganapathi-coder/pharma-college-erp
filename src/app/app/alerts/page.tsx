@@ -1,21 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
+import { StatCard } from "@/components/stat-card";
+import { AlertCard, severityRank } from "@/components/alert-card";
+import { EmptyState } from "@/components/empty-state";
 import { SectionSelect } from "@/components/linked-selects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
-import type { Channel, Notice } from "@/lib/types";
+import type { AlertSeverity, Channel, Notice } from "@/lib/types";
 
 const CHANNELS: { id: Channel; label: string }[] = [
   { id: "inapp", label: "In-app" },
@@ -25,66 +27,115 @@ const CHANNELS: { id: Channel; label: string }[] = [
 ];
 
 export default function AlertsPage() {
-  const { state, save, remove, allowed, user } = useApp();
+  const { state, save, allowed, user, authHeader } = useApp();
   const canWrite = allowed("notices", "write");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [urgent, setUrgent] = useState(false);
-  const [channels, setChannels] = useState<Channel[]>(["inapp", "sms", "whatsapp", "email"]);
+  const [severity, setSeverity] = useState<AlertSeverity>("INFO");
+  const [channels, setChannels] = useState<Channel[]>(["inapp"]);
   const [audience, setAudience] = useState("All");
   const [sectionId, setSectionId] = useState("");
   const [studentId, setStudentId] = useState("");
+  const [q, setQ] = useState("");
+  const [sevFilter, setSevFilter] = useState("all");
+  const [readFilter, setReadFilter] = useState("all");
+  const [busy, setBusy] = useState(false);
+
+  const notices = useMemo(() => {
+    return [...state.notices]
+      .filter((n) => !n.archived)
+      .filter((n) => !q || `${n.title} ${n.body}`.toLowerCase().includes(q.toLowerCase()))
+      .filter((n) => sevFilter === "all" || (n.severity ?? (n.urgent ? "URGENT" : "INFO")) === sevFilter)
+      .filter((n) => {
+        const unread = !(n.readBy ?? []).includes(user?.id ?? "");
+        if (readFilter === "unread") return unread;
+        if (readFilter === "read") return !unread;
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          severityRank((a.severity ?? "INFO") as AlertSeverity) - severityRank((b.severity ?? "INFO") as AlertSeverity),
+      );
+  }, [state.notices, q, sevFilter, readFilter, user?.id]);
+
+  const today = new Date().toISOString().slice(0, 10);
 
   async function send() {
-    const res = await fetch("/api/notify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body, channels, urgent, sectionId, studentId }),
-    });
-    const data = await res.json();
-    const notice: Notice = {
-      id: uid("n"),
-      title,
-      body,
-      channels,
-      audience,
-      sectionId: sectionId || undefined,
-      studentId: studentId || undefined,
-      urgent,
-      createdAt: new Date().toISOString(),
-      createdBy: user?.id ?? "",
-      status: data.ok ? "sent" : "queued",
-      deliveryNote: data.note,
-    };
-    await save("notices", notice, `Sent alert "${title}" on ${channels.join(", ")}.`);
-    toast.success(data.note);
-    setTitle("");
-    setBody("");
+    setBusy(true);
+    try {
+      const headers = await authHeader();
+      const res = await fetch("/api/notify", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body, channels, studentId, sectionId }),
+      });
+      const data = await res.json();
+      const notice: Notice = {
+        id: uid("n"),
+        title,
+        body,
+        channels,
+        audience,
+        sectionId: sectionId || undefined,
+        studentId: studentId || undefined,
+        urgent: severity === "URGENT",
+        severity,
+        createdAt: new Date().toISOString(),
+        createdBy: user?.id ?? "",
+        createdByName: user?.name,
+        status: data.ok && (data.failed ?? []).length === 0 ? (data.delivered?.length ? "sent" : "not_configured") : "failed",
+        deliveryNote: data.note,
+        readBy: [],
+      };
+      if (!data.ok) toast.error(data.note ?? "Alert was not delivered.");
+      else if ((data.notConfigured ?? []).length) toast.message(data.note);
+      else toast.success("In-app alert stored. Provider channels reported success only if configured.");
+      await save("notices", notice, `Alert "${title}" (${severity}).`);
+      setTitle("");
+      setBody("");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <Guard module="notices">
       <PageHeader
         title="Alerts"
-        note="Send WhatsApp, SMS, email, and in-app in one go. Pick all, a section, or one student. MSG91 and SMTP send live when keys are set; otherwise the alert is stored and queued."
+        note="Office alerts with severity. SMS/WhatsApp send only to a selected student's phone on file. Email needs SMTP. Success is never shown unless the provider actually accepted the message."
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total alerts" value={`${state.notices.filter((n) => !n.archived).length}`} />
+        <StatCard title="Urgent" value={`${state.notices.filter((n) => n.severity === "URGENT" || n.urgent).length}`} />
+        <StatCard title="Unread for you" value={`${state.notices.filter((n) => !(n.readBy ?? []).includes(user?.id ?? "")).length}`} />
+        <StatCard title="Created today" value={`${state.notices.filter((n) => n.createdAt.slice(0, 10) === today).length}`} />
+      </div>
       {canWrite ? (
-        <div className="mb-6 space-y-3 rounded-xl border border-border p-4">
+        <div className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4">
           <div className="space-y-1">
-            <Label>Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Label htmlFor="alert-title">Title</Label>
+            <Input id="alert-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label>Message</Label>
-            <Textarea value={body} onChange={(e) => setBody(e.target.value)} />
+            <Label htmlFor="alert-body">Message</Label>
+            <Textarea id="alert-body" value={body} onChange={(e) => setBody(e.target.value)} required />
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
+              <Label>Severity</Label>
+              <Select value={severity} onValueChange={pick((v) => setSeverity(v as AlertSeverity))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(["INFO", "SUCCESS", "WARNING", "ERROR", "URGENT"] as const).map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label>Audience</Label>
               <Select value={audience} onValueChange={pick(setAudience)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All</SelectItem>
                   <SelectItem value="Students">Students</SelectItem>
@@ -95,21 +146,15 @@ export default function AlertsPage() {
                 </SelectContent>
               </Select>
             </div>
-            {audience === "Section" ? (
-              <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />
-            ) : null}
+            {audience === "Section" ? <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} /> : null}
             {audience === "Student" ? (
               <div className="space-y-1">
                 <Label>Student</Label>
                 <Select value={studentId} onValueChange={pick(setStudentId)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {state.students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
+                    {state.students.filter((s) => !s.deletedAt).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -118,43 +163,60 @@ export default function AlertsPage() {
           </div>
           <div className="flex flex-wrap gap-4">
             {CHANNELS.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={channels.includes(c.id)}
-                  onCheckedChange={(v) => setChannels((prev) => (v ? [...prev, c.id] : prev.filter((x) => x !== c.id)))}
-                />
+              <label key={c.id} className="flex min-h-11 items-center gap-2 text-sm">
+                <Checkbox checked={channels.includes(c.id)} onCheckedChange={(v) => setChannels((prev) => (v ? [...prev, c.id] : prev.filter((x) => x !== c.id)))} />
                 {c.label}
               </label>
             ))}
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={urgent} onCheckedChange={(v) => setUrgent(Boolean(v))} />
-              Urgent
-            </label>
           </div>
-          <Button disabled={!title || !body} onClick={() => void send()}>
-            Send alert
+          <Button className="min-h-11" disabled={!title || !body || busy} onClick={() => void send()}>
+            {busy ? "Sending…" : "Send alert"}
           </Button>
         </div>
       ) : null}
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search alerts" className="min-h-11" aria-label="Search alerts" />
+        <Select value={sevFilter} onValueChange={pick(setSevFilter)}>
+          <SelectTrigger className="min-h-11"><SelectValue placeholder="Severity" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All severities</SelectItem>
+            {(["URGENT", "ERROR", "WARNING", "INFO", "SUCCESS"] as const).map((s) => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={readFilter} onValueChange={pick(setReadFilter)}>
+          <SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="unread">Unread</SelectItem>
+            <SelectItem value="read">Read</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       <div className="space-y-3">
-        {state.notices.map((n) => (
-          <article key={n.id} className="rounded-xl border border-border p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">{n.title}</h2>
-              {n.urgent ? <Badge>Urgent</Badge> : null}
-              <Badge variant="outline">{n.status}</Badge>
-              {canWrite ? (
-                <Button size="sm" variant="ghost" onClick={() => void remove("notices", n.id, `Deleted alert ${n.title}.`)}>
-                  Delete
+        {notices.length === 0 ? (
+          <EmptyState title="No alerts" description="Nothing matches the current filters, or no alerts have been sent yet." />
+        ) : (
+          notices.map((n) => (
+            <AlertCard
+              key={n.id}
+              notice={n}
+              actions={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() =>
+                    void save("notices", { ...n, readBy: [...new Set([...(n.readBy ?? []), user?.id ?? ""])] }, `Read alert ${n.title}.`)
+                  }
+                >
+                  Mark as read
                 </Button>
-              ) : null}
-            </div>
-            <p className="mt-1 text-sm">{n.body}</p>
-            <p className="mt-2 text-xs">
-              {n.channels.join(" · ")} · {n.audience} · {new Date(n.createdAt).toLocaleString()} · {n.deliveryNote}
-            </p>
-          </article>
-        ))}
+              }
+            />
+          ))
+        )}
       </div>
     </Guard>
   );

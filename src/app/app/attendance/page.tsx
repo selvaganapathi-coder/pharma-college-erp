@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { StatCard } from "@/components/stat-card";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { CourseSelect, SectionSelect } from "@/components/linked-selects";
@@ -19,7 +20,7 @@ export default function AttendancePage() {
   const [courseId, setCourseId] = useState(state.courses.find((c) => c.kind === "subject")?.id ?? "");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const students = useMemo(
-    () => state.students.filter((s) => s.sectionId === sectionId && s.status === "active" && (!sid || s.id === sid)),
+    () => state.students.filter((s) => !s.deletedAt && s.sectionId === sectionId && s.status === "active" && (!sid || s.id === sid)),
     [state.students, sectionId, sid],
   );
   const canWrite = allowed("attendance", "write") && !sid;
@@ -56,6 +57,11 @@ export default function AttendancePage() {
         title="Attendance"
         note="Pick section, then subject paper, then date. Mark present, late, or absent. Parents and students only view."
       />
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+        <StatCard title="In this list" value={`${students.length}`} />
+        <StatCard title="Present (saved)" value={`${students.filter((st) => statusOf(st.id) === "present").length}`} />
+        <StatCard title="Absent / late" value={`${students.filter((st) => statusOf(st.id) !== "present").length}`} />
+      </div>
       <div className="mb-4 grid gap-3 md:grid-cols-3">
         <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />
         <CourseSelect

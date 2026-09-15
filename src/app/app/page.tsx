@@ -1,105 +1,113 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Bell, ClipboardCheck, GraduationCap, Receipt, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { AlertCard, severityRank } from "@/components/alert-card";
+import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/lib/app-context";
+import { roleLabel } from "@/lib/rbac";
+import type { AlertSeverity } from "@/lib/types";
 
 export default function DashboardPage() {
   const { user, state, scopedStudentId } = useApp();
+  const router = useRouter();
   const sid = scopedStudentId();
   const myStudent = state.students.find((s) => s.id === sid);
-  const present = state.attendance.filter((a) => a.status === "present").length;
-  const attPct = state.attendance.length ? Math.round((present / state.attendance.length) * 100) : 0;
+  const liveStudents = state.students.filter((s) => !s.deletedAt);
+  const liveStaff = state.staff.filter((s) => !s.deletedAt);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayAtt = state.attendance.filter((a) => a.date === today);
+  const presentToday = todayAtt.filter((a) => a.status === "present").length;
   const dueFees = state.fees.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0);
   const paidFees = state.fees.filter((f) => f.status === "paid").reduce((s, f) => s + f.amount, 0);
+  const upcoming = state.exams.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
+  const important = [...state.notices]
+    .filter((n) => !n.archived)
+    .sort((a, b) => severityRank((a.severity ?? (a.urgent ? "URGENT" : "INFO")) as AlertSeverity) - severityRank((b.severity ?? "INFO") as AlertSeverity))
+    .slice(0, 5);
   const mineFees = sid ? state.fees.filter((f) => f.studentId === sid) : [];
   const mineAtt = sid ? state.attendance.filter((a) => a.studentId === sid) : [];
-  const minePct = mineAtt.length
-    ? Math.round((mineAtt.filter((a) => a.status === "present").length / mineAtt.length) * 100)
-    : 0;
-  const urgent = state.notices.filter((n) => n.urgent).slice(0, 3);
+  const minePct = mineAtt.length ? Math.round((mineAtt.filter((a) => a.status === "present").length / mineAtt.length) * 100) : 0;
 
-  if (user?.role === "student" || user?.role === "parent") {
+  if (!user) return null;
+
+  if (user.role === "student" || user.role === "parent") {
     return (
       <div>
         <PageHeader
           title={`Welcome, ${user.name}`}
-          note={
-            user.role === "parent"
-              ? `Linked student: ${myStudent?.name ?? "not linked yet"}.`
-              : "Your attendance, fees, and notices."
-          }
+          note={user.role === "parent" ? `Linked student: ${myStudent?.name ?? "not linked yet"}.` : "Your attendance, fees, and notices."}
         />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Stat title="Attendance" value={mineAtt.length ? `${minePct}%` : "—"} note="This term" />
-          <Stat
+          <StatCard title="Attendance" value={mineAtt.length ? `${minePct}%` : "—"} note="Marked sessions" icon={<ClipboardCheck className="size-4" />} />
+          <StatCard
             title="Fees due"
             value={`₹${mineFees.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0).toLocaleString("en-IN")}`}
             note="Pay from Fees"
+            icon={<Receipt className="size-4" />}
           />
-          <Stat
-            title="Books out"
-            value={`${state.checkouts.filter((c) => c.studentId === sid && !c.returnedOn).length}`}
-            note="Library"
-          />
-          <Stat
-            title="Section"
-            value={state.sections.find((s) => s.id === myStudent?.sectionId)?.name ?? "—"}
-            note={state.courses.find((c) => c.id === myStudent?.courseId)?.name ?? "Not assigned"}
-          />
+          <StatCard title="Books out" value={`${state.checkouts.filter((c) => c.studentId === sid && !c.returnedOn).length}`} note="Library" />
+          <StatCard title="Section" value={state.sections.find((s) => s.id === myStudent?.sectionId)?.name ?? "—"} note={state.courses.find((c) => c.id === myStudent?.courseId)?.name ?? "Not assigned"} />
         </div>
         <div className="mt-6 space-y-3">
-          {urgent.length === 0 ? <p className="text-sm text-muted-foreground">No urgent alerts.</p> : null}
-          {urgent.map((n) => (
-            <div key={n.id} className="rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-primary">{n.title}</p>
-                <Badge>Urgent</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">{n.body}</p>
-            </div>
-          ))}
-          <Link href="/app/messages" className="text-sm font-medium text-primary underline">
-            Open notices
-          </Link>
+          {important.length === 0 ? <p className="text-sm text-muted-foreground">No alerts yet.</p> : important.map((n) => <AlertCard key={n.id} notice={n} />)}
         </div>
       </div>
     );
   }
 
-  const empty = state.students.length === 0 && state.staff.length === 0;
+  const empty = liveStudents.length === 0 && liveStaff.length === 0;
 
   return (
     <div>
       <PageHeader
-        title="Operations overview"
-        note="Add real college data from the modules below. This portal starts empty."
+        title={`Welcome, ${user.name}`}
+        note={`${roleLabel(user.role)} · GP Pharmacy College operations`}
       />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat title="Students" value={`${state.students.length}`} note="Active files" />
-        <Stat title="Staff" value={`${state.staff.length}`} note="Faculty and office" />
-        <Stat title="Attendance" value={state.attendance.length ? `${attPct}%` : "—"} note="Marked sessions" />
-        <Stat
-          title="Fees collected"
-          value={`₹${paidFees.toLocaleString("en-IN")}`}
-          note={dueFees ? `Due ₹${dueFees.toLocaleString("en-IN")}` : "No dues"}
-        />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard title="Total students" value={`${liveStudents.length}`} note={`${liveStudents.filter((s) => s.status === "active").length} active`} icon={<GraduationCap className="size-4" />} />
+        <StatCard title="Active staff" value={`${liveStaff.filter((s) => s.status === "active").length}`} note={`${liveStaff.length} on file`} icon={<Users className="size-4" />} />
+        <StatCard title="Today's attendance" value={todayAtt.length ? `${presentToday}/${todayAtt.length}` : "—"} note={today} icon={<ClipboardCheck className="size-4" />} />
+        <StatCard title="Fees collected" value={`₹${paidFees.toLocaleString("en-IN")}`} note="Verified paid only" icon={<Receipt className="size-4" />} />
+        <StatCard title="Pending fees" value={`₹${dueFees.toLocaleString("en-IN")}`} note="Due, late, or partial" />
+        <StatCard title="Upcoming exams" value={`${upcoming.length}`} note={upcoming[0] ? upcoming[0].name : "None scheduled"} />
       </div>
       {empty ? (
-        <Card className="mt-6 border-border">
+        <div className="mt-6">
+          <EmptyState title="Get the college live" description="Add departments, programmes, staff, then admit students. Metrics stay at zero until real records exist." actionLabel="Add a department" onAction={() => router.push("/app/departments")} />
+        </div>
+      ) : null}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-primary">Get the college live</CardTitle>
+            <CardTitle className="text-base text-primary">Important alerts</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>1. Add departments, then programmes and subject papers.</p>
-            <p>2. Add sections and staff (set a portal password if they should sign in).</p>
-            <p>3. Admit students with photos, parent details, and a login if needed.</p>
-            <p>4. Build the timetable, then mark attendance and fees.</p>
+          <CardContent className="space-y-3">
+            {important.length === 0 ? <p className="text-sm text-muted-foreground">No alerts have been sent.</p> : important.map((n) => <AlertCard key={n.id} notice={n} />)}
+            <Link href="/app/alerts" className="inline-flex items-center gap-1 text-sm font-medium text-primary underline">
+              <Bell className="size-4" /> Open alerts
+            </Link>
           </CardContent>
         </Card>
-      ) : null}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base text-primary">Upcoming examinations</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {upcoming.length === 0 ? <p className="text-muted-foreground">No upcoming papers.</p> : upcoming.map((e) => (
+              <div key={e.id} className="flex justify-between gap-2 rounded-lg border border-border px-3 py-2">
+                <span>{e.name}</span>
+                <Badge variant="outline">{e.date}{e.locked ? " · locked" : ""}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[
           ["Students", "Admission files and photos", "/app/students"],
@@ -123,19 +131,5 @@ export default function DashboardPage() {
         ))}
       </div>
     </div>
-  );
-}
-
-function Stat({ title, value, note }: { title: string; value: string; note: string }) {
-  return (
-    <Card className="border-border shadow-sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold text-primary">{value}</p>
-        <p className="text-xs text-muted-foreground">{note}</p>
-      </CardContent>
-    </Card>
   );
 }

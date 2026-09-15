@@ -1,17 +1,24 @@
 "use client";
 
 import { openDB, type IDBPDatabase } from "idb";
-import { collection, doc, getDocs, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where, type Unsubscribe } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import type { AppState, AuditLog, CollectionKey } from "./types";
+import type { AppState, AuditLog, CollectionKey, Role, User } from "./types";
 import { COLLECTION_KEYS, EMPTY_STATE } from "./types";
 import { isSampleRecord } from "./seed";
+import { mergeCloud } from "./sync";
 import { getFirebase } from "./firebase";
 
-const DB_NAME = "gp-pharmacy-erp-v3";
+const DB_NAME = "gp-pharmacy-erp-v4";
 const STORE = "kv";
 const STATE_KEY = "app-state";
+const OUTBOX_KEY = "outbox";
 const SESSION_KEY = "gp-session-user-id";
+
+export type SyncStatus = "synced" | "syncing" | "offline" | "error";
+export type WriteResult = { ok: boolean; error?: string; queued?: boolean };
+
+type OutboxItem = { op: "set" | "archive"; key: CollectionKey; id: string; row?: unknown };
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -26,8 +33,16 @@ function db() {
   return dbPromise;
 }
 
+export function stripSecrets<T>(row: T): T {
+  if (!row || typeof row !== "object") return row;
+  if (!("password" in row)) return row;
+  const copy = { ...(row as object) } as T & { password?: string };
+  delete copy.password;
+  return copy;
+}
+
 function clean<T>(row: T): T {
-  return JSON.parse(JSON.stringify(row)) as T;
+  return JSON.parse(JSON.stringify(stripSecrets(row))) as T;
 }
 
 export function uid(prefix: string) {
@@ -37,8 +52,8 @@ export function uid(prefix: string) {
 export function stripSample(state: AppState): AppState {
   const next = { ...EMPTY_STATE } as AppState;
   for (const key of COLLECTION_KEYS) {
-    const rows = state[key] as { id: string; email?: string }[];
-    (next[key] as unknown[]) = rows.filter((row) => !isSampleRecord(row));
+    const rows = state[key] as { id: string; email?: string; password?: string }[];
+    (next[key] as unknown[]) = rows.filter((row) => !isSampleRecord(row)).map((row) => stripSecrets(row));
   }
   return next;
 }
@@ -58,7 +73,14 @@ function migrate(state: Partial<AppState>): AppState {
   return {
     ...EMPTY_STATE,
     ...state,
+    users: (state.users ?? []).map((u) => stripSecrets({ ...u, password: undefined }) as User),
     feePlans: state.feePlans ?? [],
+    notices: (state.notices ?? []).map((n) => ({
+      ...n,
+      severity: n.severity ?? (n.urgent ? "URGENT" : "INFO"),
+      readBy: n.readBy ?? [],
+    })),
+    fees: (state.fees ?? []).map((f) => ({ ...f, status: f.status === "paid" ? "paid" : f.status })),
     courses: (state.courses ?? []).map((c) => ({
       ...c,
       kind: c.kind ?? (c.years > 1 ? "programme" : "subject"),
@@ -84,110 +106,140 @@ export async function persistLocal(state: AppState) {
   await (await db()).put(STORE, clean(state), STATE_KEY);
 }
 
-export async function hydrateFromCloud(): Promise<Partial<AppState> | null> {
+async function readOutbox(): Promise<OutboxItem[]> {
+  return ((await (await db()).get(STORE, OUTBOX_KEY)) as OutboxItem[] | undefined) ?? [];
+}
+
+async function writeOutbox(items: OutboxItem[]) {
+  await (await db()).put(STORE, items, OUTBOX_KEY);
+}
+
+export async function hydrateFromCloud(): Promise<{ ok: boolean; data: Partial<AppState> | null; error?: string }> {
   const fb = getFirebase();
-  if (!fb?.auth.currentUser) return null;
+  if (!fb?.auth.currentUser) return { ok: false, data: null, error: "Not signed in to cloud." };
   try {
     const patch: Partial<AppState> = {};
     for (const key of COLLECTION_KEYS) {
       const snap = await getDocs(collection(fb.db, key));
       const rows = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
+        .map((d) => stripSecrets({ id: d.id, ...d.data() }))
         .filter((row) => !isSampleRecord(row as { id: string; email?: string }));
       (patch as Record<string, unknown>)[key] = rows;
     }
-    return patch;
-  } catch {
-    return null;
+    return { ok: true, data: patch };
+  } catch (err) {
+    return { ok: false, data: null, error: err instanceof Error ? err.message : "Cloud read failed." };
   }
 }
 
-export function mergeCloud(local: AppState, cloud: Partial<AppState>): AppState {
-  const next = { ...local };
-  for (const key of COLLECTION_KEYS) {
-    const rows = cloud[key];
-    if (Array.isArray(rows) && rows.length > 0) {
-      (next[key] as AppState[typeof key]) = rows as AppState[typeof key];
-    }
-  }
-  return next;
+export { mergeCloud };
+
+export async function enqueueWrite(item: OutboxItem) {
+  const box = await readOutbox();
+  await writeOutbox([...box.filter((x) => !(x.key === item.key && x.id === item.id && x.op === item.op)), item]);
 }
 
-export async function pushMissingToCloud(state: AppState) {
+export async function flushOutbox(): Promise<WriteResult> {
   const fb = getFirebase();
-  if (!fb?.auth.currentUser) return;
-  try {
-    for (const key of COLLECTION_KEYS) {
-      const snap = await getDocs(collection(fb.db, key));
-      if (!snap.empty) continue;
-      for (const row of state[key] as { id: string }[]) {
-        await setDoc(doc(fb.db, key, row.id), clean(row));
+  if (!fb?.auth.currentUser) return { ok: false, error: "Not signed in." };
+  const box = await readOutbox();
+  const remain: OutboxItem[] = [];
+  for (const item of box) {
+    try {
+      if (item.op === "set" && item.row) {
+        await setDoc(doc(fb.db, item.key, item.id), clean(item.row));
+      } else if (item.op === "archive" && item.row) {
+        await setDoc(doc(fb.db, item.key, item.id), clean(item.row));
       }
+    } catch (err) {
+      remain.push(item);
+      return { ok: false, queued: true, error: err instanceof Error ? err.message : "Cloud write failed." };
     }
-  } catch {
-    /* rules or offline */
   }
+  await writeOutbox(remain);
+  return { ok: remain.length === 0, queued: remain.length > 0 };
 }
 
-export async function writeRow<K extends CollectionKey>(key: K, row: AppState[K][number]) {
+export async function writeRow<K extends CollectionKey>(key: K, row: AppState[K][number]): Promise<WriteResult> {
   const item = clean(row) as AppState[K][number] & { id: string };
   const fb = getFirebase();
-  if (fb?.auth.currentUser) {
-    try {
-      await setDoc(doc(fb.db, key, item.id), item);
-    } catch {
-      /* local still saved */
-    }
+  if (!fb?.auth.currentUser) {
+    await enqueueWrite({ op: "set", key, id: item.id, row: item });
+    return { ok: false, queued: true, error: "Saved on this device. Sign in to sync with the college cloud." };
   }
-}
-
-export async function removeRow(key: CollectionKey, id: string) {
-  const fb = getFirebase();
-  if (fb?.auth.currentUser) {
-    try {
-      await deleteDoc(doc(fb.db, key, id));
-    } catch {
-      /* local still saved */
-    }
-  }
-}
-
-export async function purgeSampleFromCloud() {
-  const fb = getFirebase();
-  if (!fb?.auth.currentUser) return;
   try {
-    for (const key of COLLECTION_KEYS) {
-      const snap = await getDocs(collection(fb.db, key));
-      for (const d of snap.docs) {
-        const email = (d.data() as { email?: string }).email;
-        if (isSampleRecord({ id: d.id, email })) {
-          await deleteDoc(d.ref);
-        }
-      }
-    }
-  } catch {
-    /* rules */
+    await setDoc(doc(fb.db, key, item.id), item);
+    return { ok: true };
+  } catch (err) {
+    await enqueueWrite({ op: "set", key, id: item.id, row: item });
+    return { ok: false, queued: true, error: err instanceof Error ? err.message : "Cloud save failed. Queued for retry." };
   }
 }
 
-export function listenAll(onChange: (key: CollectionKey, rows: AppState[CollectionKey]) => void) {
+export async function archiveRow<K extends CollectionKey>(key: K, row: AppState[K][number] & { deletedAt?: string }): Promise<WriteResult> {
+  return writeRow(key, { ...row, deletedAt: new Date().toISOString() } as AppState[K][number]);
+}
+
+export type Scope = { role: Role; studentId?: string };
+
+export function listenAll(
+  onChange: (key: CollectionKey, rows: AppState[CollectionKey]) => void,
+  onError: (message: string) => void,
+  scope?: Scope,
+) {
   const fb = getFirebase();
   if (!fb) return () => undefined;
-  const unsubs = COLLECTION_KEYS.map((key) =>
-    onSnapshot(collection(fb.db, key), (snap) => {
-      const rows = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((row) => !isSampleRecord(row as { id: string; email?: string })) as AppState[CollectionKey];
-      onChange(key, rows);
-    }),
-  );
+  const unsubs: Unsubscribe[] = [];
+  for (const key of COLLECTION_KEYS) {
+    const scoped = scopedQuery(key, scope);
+    if (scoped === "skip") continue;
+    if (scoped === "doc" && scope?.studentId && (key === "students")) {
+      unsubs.push(
+        onSnapshot(
+          doc(fb.db, "students", scope.studentId),
+          (snap) => {
+            const row = snap.exists() ? [stripSecrets({ id: snap.id, ...snap.data() })] : [];
+            onChange("students", row as AppState["students"]);
+          },
+          (err) => onError(err.message),
+        ),
+      );
+      continue;
+    }
+    const ref = typeof scoped === "object" ? scoped : collection(fb.db, key);
+    unsubs.push(
+      onSnapshot(
+        ref,
+        (snap) => {
+          const rows = snap.docs
+            .map((d) => stripSecrets({ id: d.id, ...d.data() }))
+            .filter((row) => !isSampleRecord(row as { id: string; email?: string })) as AppState[CollectionKey];
+          onChange(key, rows);
+        },
+        (err) => onError(`${key}: ${err.message}`),
+      ),
+    );
+  }
   return () => unsubs.forEach((u) => u());
+}
+
+function scopedQuery(key: CollectionKey, scope?: Scope) {
+  const fb = getFirebase();
+  if (!fb || !scope || scope.role === "admin" || scope.role === "staff") return "all";
+  const sid = scope.studentId;
+  if (!sid) return "skip";
+  if (key === "users" || key === "staff" || key === "auditLogs" || key === "feePlans") return "skip";
+  if (key === "students") return "doc";
+  if (key === "fees" || key === "attendance" || key === "marks" || key === "checkouts") {
+    return query(collection(fb.db, key), where("studentId", "==", sid));
+  }
+  return "all";
 }
 
 export async function uploadPhoto(folder: string, id: string, file: File) {
   if (file.size > 4 * 1024 * 1024) throw new Error("Photo must be under 4 MB.");
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    throw new Error("Use a JPG, PNG, or WebP photo.");
+    throw new Error("Use a JPG, PNG or WebP photo.");
   }
   const fb = getFirebase();
   if (fb?.auth.currentUser) {
@@ -237,4 +289,12 @@ export function makeAudit(
     details,
     online: typeof navigator === "undefined" ? true : navigator.onLine,
   };
+}
+
+export async function loadUserProfile(uid: string, email: string): Promise<User | null> {
+  const fb = getFirebase();
+  if (!fb) return null;
+  const byUid = await getDoc(doc(fb.db, "users", uid));
+  if (byUid.exists()) return stripSecrets({ id: byUid.id, ...byUid.data() }) as User;
+  return email ? null : null;
 }

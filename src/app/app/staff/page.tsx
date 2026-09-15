@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { PhotoUpload } from "@/components/photo-upload";
@@ -13,10 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
+import { toast } from "sonner";
+import { firstError, validateStaff } from "@/lib/validation";
 import type { Staff } from "@/lib/types";
 
 export default function StaffPage() {
-  const { state, save, remove, allowed, upload } = useApp();
+  const { state, save, remove, allowed, upload, createPortalLogin } = useApp();
   const router = useRouter();
   const canWrite = allowed("staff", "write");
   const [open, setOpen] = useState(false);
@@ -24,7 +27,7 @@ export default function StaffPage() {
   const [subjectId, setSubjectId] = useState("");
   const [portalPassword, setPortalPassword] = useState("");
 
-  const rows = useMemo(() => state.staff, [state.staff]);
+  const rows = useMemo(() => state.staff.filter((s) => !s.deletedAt), [state.staff]);
 
   function startNew() {
     setForm({
@@ -56,6 +59,12 @@ export default function StaffPage() {
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total staff" value={`${rows.length}`} />
+        <StatCard title="Teaching" value={`${rows.filter((t) => t.courseIds.length > 0).length}`} />
+        <StatCard title="Office / other" value={`${rows.filter((t) => t.courseIds.length === 0).length}`} />
+        <StatCard title="Departments covered" value={`${new Set(rows.map((t) => t.departmentId)).size}`} />
+      </div>
       <DataTable
         rows={rows}
         empty="No staff yet. Add the first teacher or office record."
@@ -164,24 +173,25 @@ export default function StaffPage() {
                 ))}
               </p>
               <Button
+                className="min-h-11"
                 disabled={!form.name}
                 onClick={async () => {
+                  const err = firstError(validateStaff(form));
+                  if (err) {
+                    toast.error(err);
+                    return;
+                  }
                   await save("staff", form, `Saved staff ${form.name}.`);
                   if (portalPassword && form.email) {
-                    await save(
-                      "users",
-                      {
-                        id: uid("u"),
-                        email: form.email.toLowerCase(),
-                        password: portalPassword,
-                        name: form.name,
-                        role: "staff",
-                        phone: form.phone,
-                        staffId: form.id,
-                        active: true,
-                      },
-                      `Created staff login for ${form.email}.`,
-                    );
+                    const note = await createPortalLogin({
+                      email: form.email,
+                      password: portalPassword,
+                      name: form.name,
+                      role: "staff",
+                      phone: form.phone,
+                      staffId: form.id,
+                    });
+                    if (note) toast.error(note);
                   }
                   setPortalPassword("");
                   setOpen(false);

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
+import { StatCard } from "@/components/stat-card";
 import { CourseSelect } from "@/components/linked-selects";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,43 +16,87 @@ import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
 import type { Fee, FeePlan } from "@/lib/types";
 
+declare global {
+  interface Window {
+    Razorpay?: new (opts: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+async function loadRazorpay() {
+  if (window.Razorpay) return;
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Could not load Razorpay Checkout."));
+    document.body.appendChild(s);
+  });
+}
+
 export default function FeesPage() {
-  const { state, save, remove, allowed, scopedStudentId, user } = useApp();
+  const { state, save, remove, allowed, scopedStudentId, authHeader } = useApp();
   const sid = scopedStudentId();
   const canWrite = allowed("fees", "write") && !sid;
-  const rows = useMemo(() => (sid ? state.fees.filter((f) => f.studentId === sid) : state.fees), [state.fees, sid]);
-  const [payId, setPayId] = useState<string | null>(null);
+  const rows = useMemo(
+    () => (sid ? state.fees.filter((f) => f.studentId === sid && !f.deletedAt) : state.fees.filter((f) => !f.deletedAt)),
+    [state.fees, sid],
+  );
   const [receipt, setReceipt] = useState<Fee | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [plan, setPlan] = useState<FeePlan | null>(null);
-  const paying = state.fees.find((f) => f.id === payId);
+  const [busy, setBusy] = useState(false);
 
-  async function confirmPay() {
-    if (!paying) return;
-    const res = await fetch("/api/pay", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ feeId: paying.id, amount: paying.amount, studentId: paying.studentId }),
-    });
-    const data = await res.json();
-    const updated: Fee = {
-      ...paying,
-      status: "paid",
-      paidAt: new Date().toISOString().slice(0, 10),
-      method: "GP Pay / Razorpay",
-      txnId: data.txnId ?? uid("txn"),
-      receiptNo: paying.receiptNo ?? `REC-${uid("rec")}`,
-    };
-    await save("fees", updated, `Fee ${paying.term} paid by ${user?.name}.`);
-    toast.success("Payment done. Receipt is ready.");
-    setPayId(null);
-    setReceipt(updated);
+  const due = rows.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0);
+  const collected = rows.filter((f) => f.status === "paid").reduce((s, f) => s + f.amount, 0);
+  const overdue = rows.filter((f) => f.status !== "paid" && f.dueDate < new Date().toISOString().slice(0, 10));
+  const rate = rows.length ? Math.round((rows.filter((f) => f.status === "paid").length / rows.length) * 100) : 0;
+
+  async function startPay(fee: Fee) {
+    setBusy(true);
+    try {
+      const headers = await authHeader();
+      const res = await fetch("/api/pay", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "order", feeId: fee.id }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        toast.error(data.note ?? "Payment is not available.");
+        return;
+      }
+      await loadRazorpay();
+      if (!window.Razorpay) throw new Error("Razorpay Checkout is unavailable.");
+      const rz = new window.Razorpay({
+        key: data.keyId,
+        amount: Math.round(Number(data.amount) * 100),
+        currency: "INR",
+        name: "GP Pharmacy College",
+        description: fee.term,
+        order_id: data.orderId,
+        handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          const v = await fetch("/api/pay", {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "verify", feeId: fee.id, ...response }),
+          });
+          const out = await v.json();
+          if (out.ledgerUpdated) toast.success("Payment verified. Fee marked paid.");
+          else toast.error(out.note ?? "Gateway verified, but the fee ledger was not updated.");
+        },
+      });
+      rz.open();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Payment failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function generateFromPlan(p: FeePlan) {
-    const targets = state.students.filter((s) => s.courseId === p.courseId && s.year === p.year && s.status === "active");
+    const targets = state.students.filter((s) => s.courseId === p.courseId && s.year === p.year && s.status === "active" && !s.deletedAt);
     for (const st of targets) {
-      const exists = state.fees.some((f) => f.studentId === st.id && f.planId === p.id);
+      const exists = state.fees.some((f) => f.studentId === st.id && f.planId === p.id && !f.deletedAt);
       if (exists) continue;
       await save(
         "fees",
@@ -73,28 +118,32 @@ export default function FeesPage() {
   return (
     <Guard module="fees">
       <PageHeader
-        title="Fee payment"
-        note="Admin can make fee plans, raise bills, edit, or delete. Students and parents pay and print a receipt. Card data is not stored."
+        title="Fee collection"
+        note="Amounts come from fee records. Razorpay Checkout is required to collect money. The ledger is marked paid only after server-side signature verification."
         action={
           canWrite ? (
-            <Button
-              onClick={() => {
-                setPlan({
-                  id: uid("fp"),
-                  name: "",
-                  courseId: state.courses.find((c) => c.kind === "programme")?.id ?? "",
-                  year: 1,
-                  amount: 0,
-                  dueDate: new Date().toISOString().slice(0, 10),
-                });
-                setPlanOpen(true);
-              }}
-            >
+            <Button className="min-h-11" onClick={() => {
+              setPlan({
+                id: uid("fp"),
+                name: "",
+                courseId: state.courses.find((c) => c.kind === "programme")?.id ?? "",
+                year: 1,
+                amount: 0,
+                dueDate: new Date().toISOString().slice(0, 10),
+              });
+              setPlanOpen(true);
+            }}>
               New fee plan
             </Button>
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total due" value={`₹${due.toLocaleString("en-IN")}`} />
+        <StatCard title="Collected" value={`₹${collected.toLocaleString("en-IN")}`} note="Paid after verification" />
+        <StatCard title="Overdue bills" value={`${overdue.length}`} />
+        <StatCard title="Collection rate" value={`${rate}%`} />
+      </div>
       {canWrite ? (
         <div className="mb-4 grid gap-2 md:grid-cols-2">
           {state.feePlans.map((p) => (
@@ -106,12 +155,8 @@ export default function FeesPage() {
                 </p>
               </div>
               <div className="flex gap-1">
-                <Button size="sm" onClick={() => void generateFromPlan(p)}>
-                  Raise bills
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => void remove("feePlans", p.id, `Deleted plan ${p.name}.`)}>
-                  Delete
-                </Button>
+                <Button size="sm" className="min-h-11" onClick={() => void generateFromPlan(p)}>Raise bills</Button>
+                <Button size="sm" variant="outline" className="min-h-11" onClick={() => void remove("feePlans", p.id, `Archived plan ${p.name}.`)}>Archive</Button>
               </div>
             </div>
           ))}
@@ -120,12 +165,14 @@ export default function FeesPage() {
       <DataTable
         rows={rows}
         empty="No fee bills yet. Create a plan and raise bills for a programme year."
+        emptyTitle="No fee bills"
         canWrite={canWrite}
+        mobileTitle={(r) => r.term}
         filter={(row, q) => {
           const st = state.students.find((s) => s.id === row.studentId);
           return !q || `${st?.name} ${st?.rollNo} ${row.term}`.toLowerCase().includes(q);
         }}
-        onDelete={(r) => void remove("fees", r.id, `Deleted fee ${r.term}.`)}
+        onDelete={(r) => void remove("fees", r.id, `Archived fee ${r.term}.`)}
         columns={[
           {
             key: "student",
@@ -141,68 +188,32 @@ export default function FeesPage() {
           {
             key: "status",
             header: "Status",
-            cell: (r) => (
-              <Badge>
-                {r.status}
-                {r.receiptNo ? ` · ${r.receiptNo}` : ""}
-              </Badge>
-            ),
+            cell: (r) => <Badge variant="outline">{r.status}</Badge>,
           },
           {
             key: "pay",
-            header: "",
+            header: "Payment",
+            hideOnMobile: true,
             cell: (r) =>
               r.status !== "paid" ? (
-                <Button size="sm" onClick={() => setPayId(r.id)}>
-                  Pay now
+                <Button size="sm" className="min-h-11" disabled={busy} onClick={() => void startPay(r)}>
+                  Pay with Razorpay
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" onClick={() => setReceipt(r)}>
+                <Button size="sm" variant="outline" className="min-h-11" onClick={() => setReceipt(r)}>
                   Receipt
                 </Button>
               ),
           },
         ]}
       />
-      <Dialog open={Boolean(payId)} onOpenChange={(o) => !o && setPayId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Secure checkout</DialogTitle>
-          </DialogHeader>
-          {paying ? (
-            <div className="space-y-3">
-              <p className="text-sm">
-                Pay ₹{paying.amount.toLocaleString("en-IN")} for {paying.term}. Live Razorpay runs when keys are set. Demo
-                pay still issues a receipt.
-              </p>
-              <div className="space-y-1">
-                <Label>Card number</Label>
-                <Input defaultValue="4111 1111 1111 1111" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label>Valid till</Label>
-                  <Input defaultValue="12/28" />
-                </div>
-                <div className="space-y-1">
-                  <Label>CVV</Label>
-                  <Input defaultValue="123" type="password" />
-                </div>
-              </div>
-              <Button className="w-full" onClick={() => void confirmPay()}>
-                Pay ₹{paying.amount.toLocaleString("en-IN")}
-              </Button>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
       <Dialog open={Boolean(receipt)} onOpenChange={(o) => !o && setReceipt(null)}>
-        <DialogContent className="bg-card">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Fee receipt</DialogTitle>
           </DialogHeader>
           {receipt ? (
-            <div id="receipt" className="space-y-2 text-sm text-primary">
+            <div id="receipt" className="space-y-2 text-sm">
               <p className="text-lg font-bold">GP Pharmacy College</p>
               <p>Receipt {receipt.receiptNo}</p>
               <p>Student: {state.students.find((s) => s.id === receipt.studentId)?.name}</p>
@@ -210,9 +221,7 @@ export default function FeesPage() {
               <p>Amount: ₹{receipt.amount.toLocaleString("en-IN")}</p>
               <p>Paid on: {receipt.paidAt} · {receipt.method}</p>
               <p>Txn: {receipt.txnId}</p>
-              <Button className="mt-2" onClick={() => window.print()}>
-                Print
-              </Button>
+              <Button className="mt-2 min-h-11" onClick={() => window.print()}>Print</Button>
             </div>
           ) : null}
         </DialogContent>
@@ -225,16 +234,11 @@ export default function FeesPage() {
           {plan ? (
             <div className="space-y-3">
               <div className="space-y-1">
-                <Label>Name</Label>
-                <Input value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} />
+                <Label htmlFor="plan-name">Name</Label>
+                <Input id="plan-name" value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} />
               </div>
-              <CourseSelect
-                courses={state.courses}
-                kind="programme"
-                value={plan.courseId}
-                onChange={(id) => setPlan({ ...plan, courseId: id })}
-              />
-              <div className="grid grid-cols-3 gap-2">
+              <CourseSelect courses={state.courses} kind="programme" value={plan.courseId} onChange={(id) => setPlan({ ...plan, courseId: id })} />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label>Year</Label>
                   <Input type="number" value={plan.year} onChange={(e) => setPlan({ ...plan, year: Number(e.target.value) })} />
@@ -248,15 +252,10 @@ export default function FeesPage() {
                   <Input type="date" value={plan.dueDate} onChange={(e) => setPlan({ ...plan, dueDate: e.target.value })} />
                 </div>
               </div>
-              <Button
-                disabled={!plan.name}
-                onClick={async () => {
-                  await save("feePlans", plan, `Saved fee plan ${plan.name}.`);
-                  setPlanOpen(false);
-                }}
-              >
-                Save plan
-              </Button>
+              <Button className="min-h-11" disabled={!plan.name || plan.amount < 1} onClick={async () => {
+                await save("feePlans", plan, `Saved fee plan ${plan.name}.`);
+                setPlanOpen(false);
+              }}>Save plan</Button>
             </div>
           ) : null}
         </DialogContent>

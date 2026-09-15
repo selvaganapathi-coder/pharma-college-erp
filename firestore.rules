@@ -4,17 +4,157 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
-
-    match /{col}/{id} {
-      allow read, write: if signedIn() && col in [
-        'users','departments','courses','sections','students','staff','timetable',
-        'attendance','exams','marks','feePlans','fees','notices','messages','routes',
-        'books','checkouts','auditLogs'
-      ];
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function isAdmin() {
+      return hasProfile() && profile().role == 'admin' && profile().active == true;
+    }
+    function isStaff() {
+      return hasProfile() && profile().role == 'staff' && profile().active == true;
+    }
+    function isOffice() {
+      return isAdmin() || isStaff();
+    }
+    function scopedStudent() {
+      return hasProfile() && (
+        (profile().role == 'student' && profile().studentId is string)
+        || (profile().role == 'parent' && profile().childStudentId is string)
+      );
+    }
+    function myStudentId() {
+      return profile().role == 'student' ? profile().studentId : profile().childStudentId;
+    }
+    function setupOpen() {
+      return !exists(/databases/$(database)/documents/meta/setup);
     }
 
-    match /{document=**} {
-      allow read, write: if false;
+    match /meta/setup {
+      allow get: if true;
+      allow create: if signedIn()
+        && setupOpen()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow list, update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow list: if isAdmin();
+      allow create: if signedIn() && request.auth.uid == userId
+        && exists(/databases/$(database)/documents/meta/setup)
+        && get(/databases/$(database)/documents/meta/setup).data.adminUid == request.auth.uid
+        && request.resource.data.role == 'admin'
+        && request.resource.data.active == true
+        && !request.resource.data.keys().hasAny(['password']);
+      allow create: if isAdmin()
+        && request.resource.data.role in ['staff', 'student', 'parent']
+        && !request.resource.data.keys().hasAny(['password']);
+      allow update: if isAdmin()
+        && !request.resource.data.keys().hasAny(['password'])
+        && (request.resource.data.role == resource.data.role || isAdmin());
+      allow update: if signedIn() && request.auth.uid == userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.active == resource.data.active
+        && !request.resource.data.keys().hasAny(['password']);
+      allow delete: if isAdmin();
+    }
+
+    match /departments/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /courses/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /sections/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /staff/{id} {
+      allow read: if isOffice();
+      allow write: if isAdmin();
+    }
+    match /students/{id} {
+      allow get: if isOffice() || (scopedStudent() && myStudentId() == id);
+      allow list: if isOffice();
+      allow create, update: if isOffice()
+        && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status in ['active', 'left']);
+      allow delete: if isAdmin();
+    }
+    match /timetable/{id} {
+      allow read: if signedIn();
+      allow write: if isOffice();
+    }
+    match /attendance/{id} {
+      allow read: if isOffice() || (scopedStudent() && resource.data.studentId == myStudentId());
+      allow create, update: if isOffice()
+        && request.resource.data.status in ['present', 'absent', 'late']
+        && request.resource.data.studentId is string
+        && request.resource.data.date is string;
+      allow delete: if isAdmin();
+    }
+    match /exams/{id} {
+      allow read: if signedIn();
+      allow write: if isOffice();
+    }
+    match /marks/{id} {
+      allow read: if isOffice() || (scopedStudent() && resource.data.studentId == myStudentId());
+      allow create, update: if isOffice()
+        && request.resource.data.marks is number
+        && request.resource.data.marks >= 0;
+      allow delete: if isAdmin();
+    }
+    match /feePlans/{id} {
+      allow read: if isOffice();
+      allow write: if isAdmin();
+    }
+    match /fees/{id} {
+      allow read: if isAdmin()
+        || (isStaff() && true)
+        || (scopedStudent() && resource.data.studentId == myStudentId());
+      allow create: if isAdmin() && request.resource.data.status in ['due', 'late', 'partial'];
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    match /notices/{id} {
+      allow read: if signedIn();
+      allow create, update: if isOffice()
+        && request.resource.data.title is string
+        && request.resource.data.body is string;
+      allow delete: if isAdmin();
+    }
+    match /messages/{id} {
+      allow read: if signedIn();
+      allow create, update: if isOffice();
+      allow delete: if isAdmin();
+    }
+    match /routes/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /books/{id} {
+      allow read: if isOffice() || (hasProfile() && profile().role == 'student');
+      allow write: if isOffice();
+    }
+    match /checkouts/{id} {
+      allow read: if isOffice() || (scopedStudent() && resource.data.studentId == myStudentId());
+      allow write: if isOffice();
+    }
+    match /payments/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if false;
+      allow update, delete: if false;
+    }
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.keys().hasAll(['at', 'action', 'entity', 'entityId']);
+      allow update, delete: if false;
     }
   }
 }

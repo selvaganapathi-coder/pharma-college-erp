@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { PhotoUpload } from "@/components/photo-upload";
@@ -59,6 +60,12 @@ export default function LibraryPage() {
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total books" value={`${state.books.filter((b) => !b.deletedAt).length}`} />
+        <StatCard title="Issued" value={`${state.checkouts.filter((c) => !c.returnedOn).length}`} />
+        <StatCard title="Overdue" value={`${state.checkouts.filter((c) => !c.returnedOn && c.dueOn < new Date().toISOString().slice(0, 10)).length}`} />
+        <StatCard title="Available copies" value={`${Math.max(0, state.books.reduce((s, b) => s + (b.deletedAt ? 0 : b.copies), 0) - state.checkouts.filter((c) => !c.returnedOn).length)}`} />
+      </div>
       <Tabs defaultValue="books">
         <TabsList>
           <TabsTrigger value="books">Books</TabsTrigger>

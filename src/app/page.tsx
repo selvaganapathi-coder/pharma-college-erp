@@ -102,7 +102,7 @@ export default function LoginPage() {
                   autoComplete={view === "setup" ? "new-password" : "current-password"}
                 />
               </div>
-              {error ? <p className="text-sm text-primary">{error}</p> : null}
+              {error ? <p className="text-sm text-primary" role="alert">{error}</p> : null}
               <Button type="submit" disabled={busy} className="w-full">
                 {busy ? "Please wait…" : view === "setup" ? "Create admin and open ERP" : "Sign in"}
               </Button>

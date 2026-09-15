@@ -6,7 +6,7 @@ import {
   signOut,
   type Auth,
 } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { doc, getDoc, setDoc, getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { firebaseConfig } from "./firebase-config";
 
@@ -26,64 +26,99 @@ export function firebaseProjectId() {
 }
 
 let bundle: FirebaseBundle | null = null;
+let provision: FirebaseBundle | null = null;
 
 export function getFirebase(): FirebaseBundle | null {
   if (!isFirebaseConfigured()) return null;
   if (typeof window === "undefined") return null;
   if (bundle) return bundle;
-  const app = getApps()[0] ?? initializeApp(firebaseConfig);
+  const app = getApps().find((a) => a.name === "[DEFAULT]") ?? initializeApp(firebaseConfig);
   bundle = { app, auth: getAuth(app), db: getFirestore(app), storage: getStorage(app) };
   return bundle;
 }
 
-export async function firebaseSignIn(email: string, password: string) {
-  const fb = getFirebase();
-  if (!fb) return { ok: true, mode: "local" as const, note: "Cloud is off. Data stays on this device." };
+function getProvision(): FirebaseBundle | null {
+  if (!isFirebaseConfigured()) return null;
+  if (typeof window === "undefined") return null;
+  if (provision) return provision;
+  const app = getApps().find((a) => a.name === "provision") ?? initializeApp(firebaseConfig, "provision");
+  provision = { app, auth: getAuth(app), db: getFirestore(app), storage: getStorage(app) };
+  return provision;
+}
 
+export function authErrorCode(err: unknown) {
+  if (err && typeof err === "object" && "code" in err) return String((err as { code: string }).code);
+  return "";
+}
+
+export function firebaseMessage(err: unknown) {
+  const code = authErrorCode(err);
+  if (code === "auth/invalid-credential" || code === "auth/invalid-login-credentials" || code === "auth/wrong-password" || code === "auth/user-not-found") {
+    return "Email or password is wrong.";
+  }
+  if (code === "auth/too-many-requests") return "Too many attempts. Wait a few minutes, then try again.";
+  if (code === "auth/operation-not-allowed") return "Turn on Email/Password in Firebase Authentication.";
+  if (code === "auth/unauthorized-domain") return "Add this site to Firebase Authentication authorized domains.";
+  if (code === "auth/email-already-in-use") return "That email already has an account. Sign in instead.";
+  if (err && typeof err === "object" && "message" in err) return String((err as { message: string }).message);
+  return "Firebase login failed.";
+}
+
+/** Login only. Never creates an account. */
+export async function firebaseLogin(email: string, password: string) {
+  const fb = getFirebase();
+  if (!fb) return { ok: false as const, note: "Firebase is not configured on this device." };
   try {
     await signInWithEmailAndPassword(fb.auth, email, password);
-    return { ok: true, mode: "signed-in" as const, note: "Signed in. Live cloud save is on." };
-  } catch (first) {
-    const code = errorCode(first);
-    if (code === "auth/operation-not-allowed") {
-      return {
-        ok: false,
-        mode: "local" as const,
-        note: "Turn on Email/Password in Firebase Auth, then sign in again for cloud save.",
-      };
-    }
-    if (
-      code !== "auth/user-not-found" &&
-      code !== "auth/invalid-credential" &&
-      code !== "auth/invalid-login-credentials" &&
-      code !== "auth/wrong-password"
-    ) {
-      return { ok: false, mode: "local" as const, note: firebaseMessage(first) };
-    }
-
-    try {
-      await createUserWithEmailAndPassword(fb.auth, email, password);
-      return { ok: true, mode: "created" as const, note: "Cloud login created. College data will sync." };
-    } catch (second) {
-      const code2 = errorCode(second);
-      if (code2 === "auth/email-already-in-use") {
-        try {
-          await signInWithEmailAndPassword(fb.auth, email, password);
-          return { ok: true, mode: "signed-in" as const, note: "Signed in. Live cloud save is on." };
-        } catch (third) {
-          return { ok: false, mode: "local" as const, note: firebaseMessage(third) };
-        }
-      }
-      if (code2 === "auth/operation-not-allowed") {
-        return {
-          ok: false,
-          mode: "local" as const,
-          note: "Turn on Email/Password in Firebase Auth, then sign in again for cloud save.",
-        };
-      }
-      return { ok: false, mode: "local" as const, note: firebaseMessage(second) };
-    }
+    return { ok: true as const, note: "Signed in. Live cloud save is on." };
+  } catch (err) {
+    return { ok: false as const, note: firebaseMessage(err) };
   }
+}
+
+export async function firebaseRegister(email: string, password: string) {
+  const fb = getFirebase();
+  if (!fb) return { ok: false as const, note: "Firebase is not configured. Admin cannot be created in the cloud." };
+  try {
+    await createUserWithEmailAndPassword(fb.auth, email, password);
+    return { ok: true as const, note: "Cloud admin login created." };
+  } catch (err) {
+    return { ok: false as const, note: firebaseMessage(err) };
+  }
+}
+
+/** Create a portal Auth user without replacing the signed-in admin session. */
+export async function provisionPortalAuth(email: string, password: string) {
+  const p = getProvision();
+  if (!p) return { ok: false as const, uid: null as string | null, note: "Firebase is not configured." };
+  try {
+    const cred = await createUserWithEmailAndPassword(p.auth, email, password);
+    const uid = cred.user.uid;
+    await signOut(p.auth);
+    return { ok: true as const, uid, note: "Portal login created." };
+  } catch (err) {
+    return { ok: false as const, uid: null as string | null, note: firebaseMessage(err) };
+  }
+}
+
+export async function setupDocExists() {
+  const fb = getFirebase();
+  if (!fb) return false;
+  try {
+    const snap = await getDoc(doc(fb.db, "meta", "setup"));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+
+export async function writeSetupLock(adminUid: string) {
+  const fb = getFirebase();
+  if (!fb?.auth.currentUser) throw new Error("Not signed in.");
+  await setDoc(doc(fb.db, "meta", "setup"), {
+    adminUid,
+    at: new Date().toISOString(),
+  });
 }
 
 export async function firebaseSignOut() {
@@ -96,12 +131,8 @@ export async function firebaseSignOut() {
   }
 }
 
-function errorCode(err: unknown) {
-  if (err && typeof err === "object" && "code" in err) return String((err as { code: string }).code);
-  return "";
-}
-
-function firebaseMessage(err: unknown) {
-  if (err && typeof err === "object" && "message" in err) return String((err as { message: string }).message);
-  return "Firebase login failed.";
+export async function currentIdToken() {
+  const fb = getFirebase();
+  if (!fb?.auth.currentUser) return null;
+  return fb.auth.currentUser.getIdToken();
 }

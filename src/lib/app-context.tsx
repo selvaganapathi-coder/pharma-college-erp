@@ -10,30 +10,42 @@ import {
   type ReactNode,
 } from "react";
 import { onAuthStateChanged } from "firebase/auth";
+import { toast } from "sonner";
 import type { AppState, CollectionKey, Role, User } from "@/lib/types";
 import { EMPTY_STATE } from "@/lib/types";
 import {
+  flushOutbox,
   hydrateFromCloud,
   listenAll,
   loadState,
+  loadUserProfile,
   makeAudit,
   mergeCloud,
   persistLocal,
-  purgeSampleFromCloud,
-  pushMissingToCloud,
   readSession,
-  removeRow,
   saveSession,
-  uid,
   uploadPhoto,
   writeRow,
+  type SyncStatus,
 } from "@/lib/store";
 import { can, type ModuleKey } from "@/lib/rbac";
-import { firebaseSignIn, firebaseSignOut, getFirebase } from "@/lib/firebase";
+import {
+  currentIdToken,
+  firebaseLogin,
+  firebaseRegister,
+  firebaseSignOut,
+  getFirebase,
+  provisionPortalAuth,
+  setupDocExists,
+  writeSetupLock,
+} from "@/lib/firebase";
 
 type AppContextValue = {
   ready: boolean;
   online: boolean;
+  syncStatus: SyncStatus;
+  lastSyncedAt: string | null;
+  syncError: string | null;
   user: User | null;
   state: AppState;
   firebaseNote: string | null;
@@ -45,7 +57,10 @@ type AppContextValue = {
   scopedStudentId: () => string | undefined;
   save: <K extends CollectionKey>(key: K, row: AppState[K][number], details: string) => Promise<void>;
   remove: (key: CollectionKey, id: string, details: string) => Promise<void>;
+  archive: <K extends CollectionKey>(key: K, row: AppState[K][number] & { deletedAt?: string }, details: string) => Promise<void>;
   upload: (folder: string, id: string, file: File) => Promise<string>;
+  createPortalLogin: (input: { email: string; password: string; name: string; role: Role; phone: string; studentId?: string; staffId?: string; childStudentId?: string }) => Promise<string | null>;
+  authHeader: () => Promise<HeadersInit>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -55,60 +70,85 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [firebaseNote, setFirebaseNote] = useState<string | null>(null);
-  const [online, setOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("offline");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [setupLocked, setSetupLocked] = useState(false);
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
 
   useEffect(() => {
     let alive = true;
     let unsubLive: () => void = () => undefined;
     let unsubAuth: () => void = () => undefined;
     const on = () => setOnline(true);
-    const off = () => setOnline(false);
+    const off = () => {
+      setOnline(false);
+      setSyncStatus("offline");
+    };
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
 
-    function attachLive() {
+    function attachLive(profile: User | null) {
       unsubLive();
-      unsubLive = listenAll((key, rows) => {
-        if (!alive || !rows.length) return;
-        setState((prev) => {
-          const next = { ...prev, [key]: rows };
-          void persistLocal(next);
-          return next;
-        });
-      });
+      const scope = profile
+        ? { role: profile.role, studentId: profile.role === "student" ? profile.studentId : profile.childStudentId }
+        : undefined;
+      unsubLive = listenAll(
+        (key, rows) => {
+          if (!alive) return;
+          setState((prev) => {
+            const next = { ...prev, [key]: rows };
+            void persistLocal(next);
+            return next;
+          });
+          setSyncStatus("synced");
+          setLastSyncedAt(new Date().toISOString());
+          setSyncError(null);
+        },
+        (message) => {
+          setSyncStatus("error");
+          setSyncError(message);
+        },
+        scope,
+      );
     }
 
-    async function applyCloud(local: AppState) {
+    async function sessionFromAuth() {
       const fb = getFirebase();
+      const fbUser = fb?.auth.currentUser;
+      if (!fbUser) return null;
+      setSyncStatus("syncing");
+      const profile = await loadUserProfile(fbUser.uid, fbUser.email ?? "");
+      if (!profile || !profile.active) return null;
       const cloud = await hydrateFromCloud();
-      if (!alive) return local;
-      let merged = cloud ? mergeCloud(local, cloud) : local;
-      const email = fb?.auth.currentUser?.email?.toLowerCase();
-      if (email && !merged.users.some((u) => u.email.toLowerCase() === email)) {
-        const account: User = {
-          id: uid("u"),
-          email,
-          password: "",
-          name: email.split("@")[0],
-          role: merged.users.length === 0 ? "admin" : "staff",
-          phone: "",
-          active: true,
-          uid: fb?.auth.currentUser?.uid,
-        };
-        merged = { ...merged, users: [account, ...merged.users] };
-        await writeRow("users", account);
+      const local = await loadState();
+      if (!alive) return profile;
+      let nextState = local;
+      if (cloud.ok && cloud.data) {
+        nextState = mergeCloud(local, cloud.data, true);
+      } else {
+        setSyncStatus(cloud.error ? "error" : "offline");
+        setSyncError(cloud.error ?? null);
       }
-      setState(merged);
-      void persistLocal(merged);
-      const match = email ? merged.users.find((u) => u.email.toLowerCase() === email && u.active) : undefined;
-      if (match) {
-        setUserId(match.id);
-        saveSession(match.id);
+      if (!nextState.users.some((u) => u.id === profile.id)) {
+        nextState = { ...nextState, users: [profile, ...nextState.users] };
       }
-      await pushMissingToCloud(merged);
-      return merged;
+      setState(nextState);
+      void persistLocal(nextState);
+      if (cloud.ok) {
+        setSyncStatus("synced");
+        setLastSyncedAt(new Date().toISOString());
+        setSyncError(null);
+      }
+      setUserId(profile.id);
+      saveSession(profile.id);
+      attachLive(profile);
+      const flush = await flushOutbox();
+      if (!flush.ok && flush.error) {
+        setSyncStatus("error");
+        setSyncError(flush.error);
+      }
+      return profile;
     }
 
     void (async () => {
@@ -117,23 +157,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!alive) return;
         setState(loaded);
         setUserId(readSession());
-
+        const locked = await setupDocExists();
+        if (alive) setSetupLocked(locked);
         const fb = getFirebase();
         if (!fb) {
+          setSyncStatus("offline");
           setReady(true);
           return;
         }
         await fb.auth.authStateReady();
         if (!alive) return;
-        if (fb.auth.currentUser) {
-          await applyCloud(loaded);
-          attachLive();
-        }
+        await sessionFromAuth();
         unsubAuth = onAuthStateChanged(fb.auth, (fbUser) => {
-          if (!alive || !fbUser) return;
-          void loadState()
-            .then((local) => applyCloud(local))
-            .then(() => attachLive());
+          if (!alive) return;
+          if (!fbUser) {
+            unsubLive();
+            return;
+          }
+          void sessionFromAuth();
         });
       } finally {
         if (alive) setReady(true);
@@ -150,17 +191,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const user = state.users.find((u) => u.id === userId && u.active) ?? null;
-  const needsSetup = ready && state.users.length === 0;
+  const needsSetup = ready && !setupLocked && state.users.filter((u) => u.role === "admin" && u.active).length === 0;
 
   const audit = useCallback(
     async (action: string, entity: string, entityId: string, details: string) => {
-      const entry = makeAudit(user?.id ?? "system", user?.name ?? "System", action, entity, entityId, details);
+      const actor = getFirebase()?.auth.currentUser?.uid ?? user?.id ?? "unknown";
+      const entry = makeAudit(actor, user?.name ?? "System", action, entity, entityId, details);
       setState((prev) => {
         const next = { ...prev, auditLogs: [entry, ...prev.auditLogs].slice(0, 800) };
         void persistLocal(next);
         return next;
       });
-      await writeRow("auditLogs", entry);
+      const result = await writeRow("auditLogs", entry);
+      if (!result.ok && result.error) setSyncError(result.error);
     },
     [user],
   );
@@ -176,88 +219,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void persistLocal(next);
         return next;
       });
-      await writeRow(key, item);
+      const result = await writeRow(key, item);
+      if (!result.ok) {
+        setSyncStatus(result.queued ? "syncing" : "error");
+        setSyncError(result.error ?? "Save did not reach the cloud.");
+        toast.error(result.error ?? "Save did not reach the cloud.");
+      } else {
+        setSyncStatus("synced");
+        setLastSyncedAt(new Date().toISOString());
+        setSyncError(null);
+      }
       await audit("save", key, item.id, details);
     },
     [audit],
   );
 
+  const archive = useCallback(
+    async <K extends CollectionKey>(key: K, row: AppState[K][number] & { deletedAt?: string }, details: string) => {
+      const updated = { ...row, deletedAt: new Date().toISOString() } as AppState[K][number];
+      await save(key, updated, details);
+    },
+    [save],
+  );
+
   const remove = useCallback(
     async (key: CollectionKey, id: string, details: string) => {
-      setState((prev) => {
-        const rows = (prev[key] as { id: string }[]).filter((r) => r.id !== id);
-        const next = { ...prev, [key]: rows };
-        void persistLocal(next);
-        return next;
-      });
-      await removeRow(key, id);
-      await audit("delete", key, id, details);
+      const list = state[key] as { id: string }[];
+      const row = list.find((r) => r.id === id);
+      if (!row) return;
+      if (key === "students" || key === "staff" || key === "books" || key === "fees") {
+        await archive(key, row as AppState[typeof key][number] & { deletedAt?: string }, details);
+        return;
+      }
+      toast.error("This record cannot be hard-deleted from the browser. Archive it instead.");
+      await audit("delete-blocked", key, id, details);
     },
-    [audit],
+    [archive, audit, state],
   );
 
   const login = useCallback(
     async (email: string, password: string) => {
       const address = email.trim().toLowerCase();
-      const fb = await firebaseSignIn(address, password);
+      const fb = await firebaseLogin(address, password);
       setFirebaseNote(fb.note);
-      const signedIn = Boolean(getFirebase()?.auth.currentUser);
-
-      let users = state.users;
-      if (signedIn) {
-        const cloud = await hydrateFromCloud();
-        if (cloud) {
-          const merged = mergeCloud(state, cloud);
-          setState(merged);
-          void persistLocal(merged);
-          users = merged.users;
-          await pushMissingToCloud(merged);
+      if (!fb.ok) return fb.note;
+      const uidAuth = getFirebase()?.auth.currentUser?.uid;
+      if (!uidAuth) return "Cloud sign-in did not complete.";
+      const profile = await loadUserProfile(uidAuth, address);
+      if (!profile?.active) {
+        await firebaseSignOut();
+        return "This login has no college profile. Ask the office to create your access.";
+      }
+      const cloud = await hydrateFromCloud();
+      const local = await loadState();
+      if (cloud.ok && cloud.data) {
+        let merged = mergeCloud(local, cloud.data, true);
+        if (!merged.users.some((u) => u.id === profile.id)) {
+          merged = { ...merged, users: [profile, ...merged.users] };
         }
+        setState(merged);
+        void persistLocal(merged);
+      } else {
+        setState((prev) =>
+          prev.users.some((u) => u.id === profile.id) ? prev : { ...prev, users: [profile, ...prev.users] },
+        );
       }
-
-      let found = users.find((u) => u.email.toLowerCase() === address && u.active) ?? null;
-      if (found && !signedIn && found.password !== password) {
-        return "Email or password is wrong.";
-      }
-      if (!found && signedIn) {
-        found = {
-          id: uid("u"),
-          email: address,
-          password,
-          name: address.split("@")[0],
-          role: users.length === 0 ? "admin" : "staff",
-          phone: "",
-          active: true,
-          uid: getFirebase()?.auth.currentUser?.uid,
-        };
-        setState((prev) => {
-          const next = { ...prev, users: [found!, ...prev.users] };
-          void persistLocal(next);
-          return next;
-        });
-        await writeRow("users", found);
-      }
-      if (!found) {
-        found =
-          state.users.find((u) => u.email.toLowerCase() === address && u.password === password && u.active) ?? null;
-      }
-      if (!found) return "Email or password is wrong.";
-      if (signedIn && password && found.password !== password) {
-        found = { ...found, password };
-        setState((prev) => {
-          const next = { ...prev, users: prev.users.map((u) => (u.id === found!.id ? found! : u)) };
-          void persistLocal(next);
-          return next;
-        });
-        await writeRow("users", found);
-      }
-      setUserId(found.id);
-      saveSession(found.id);
-      if (fb.ok) await purgeSampleFromCloud();
-      await audit("login", "session", found.id, `${found.role} signed in.`);
+      setUserId(profile.id);
+      saveSession(profile.id);
+      setSyncStatus("synced");
+      await audit("login", "session", profile.id, `${profile.role} signed in.`);
       return null;
     },
-    [audit, state],
+    [audit],
   );
 
   const registerAdmin = useCallback(
@@ -265,55 +298,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!input.name.trim() || !input.email.trim() || input.password.length < 8) {
         return "Enter your name, email, and a password of at least 8 characters.";
       }
+      if (await setupDocExists()) return "An administrator already exists. Please sign in.";
       const address = input.email.trim().toLowerCase();
-      const fb = await firebaseSignIn(address, input.password);
-      setFirebaseNote(fb.note);
-
-      if (getFirebase()?.auth.currentUser) {
-        const cloud = await hydrateFromCloud();
-        if (cloud?.users && cloud.users.length > 0) {
-          const merged = mergeCloud(state, cloud);
-          setState(merged);
-          void persistLocal(merged);
-          const existing = merged.users.find((u) => u.email.toLowerCase() === address && u.active);
-          if (existing) {
-            setUserId(existing.id);
-            saveSession(existing.id);
-            return null;
-          }
-          return "An admin already exists. Please sign in with that email.";
-        }
+      const created = await firebaseRegister(address, input.password);
+      setFirebaseNote(created.note);
+      if (!created.ok) return created.note;
+      const uidAuth = getFirebase()?.auth.currentUser?.uid;
+      if (!uidAuth) return "Cloud account was not created.";
+      try {
+        await writeSetupLock(uidAuth);
+      } catch {
+        await firebaseSignOut();
+        return "Another administrator finished setup first. Sign in with that account.";
       }
-
-      if (state.users.length > 0) return "An admin already exists. Please sign in.";
-
       const account: User = {
-        id: uid("u"),
+        id: uidAuth,
+        uid: uidAuth,
         email: address,
-        password: input.password,
         name: input.name.trim(),
         role: "admin",
         phone: input.phone.trim(),
         active: true,
-        uid: getFirebase()?.auth.currentUser?.uid,
       };
+      const result = await writeRow("users", account);
+      if (!result.ok) {
+        return result.error ?? "Could not save the administrator profile.";
+      }
       setState((prev) => {
-        const next = { ...prev, users: [account, ...prev.users] };
+        const next = { ...prev, users: [account, ...prev.users.filter((u) => u.id !== account.id)] };
         void persistLocal(next);
         return next;
       });
-      await writeRow("users", account);
+      setSetupLocked(true);
       setUserId(account.id);
       saveSession(account.id);
-      if (fb.ok) await purgeSampleFromCloud();
-      if (!getFirebase()?.auth.currentUser) {
-        setFirebaseNote(
-          "Admin is saved on this browser only. Turn on Email/Password in Firebase Auth and add this site to Authorized domains so the account is kept.",
-        );
-      }
+      await audit("account-create", "users", account.id, "First administrator created.");
       return null;
     },
-    [state],
+    [audit],
   );
 
   const logout = useCallback(() => {
@@ -324,10 +346,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFirebaseNote(null);
   }, [audit, user]);
 
+  const createPortalLogin = useCallback(
+    async (input: {
+      email: string;
+      password: string;
+      name: string;
+      role: Role;
+      phone: string;
+      studentId?: string;
+      staffId?: string;
+      childStudentId?: string;
+    }) => {
+      if (!user || (user.role !== "admin" && user.role !== "staff")) return "Only office staff can create portal logins.";
+      if (input.role === "admin") return "Cannot create another administrator from the browser.";
+      if (input.password.length < 8) return "Portal password must be at least 8 characters.";
+      const made = await provisionPortalAuth(input.email.trim().toLowerCase(), input.password);
+      if (!made.ok || !made.uid) return made.note;
+      const profile: User = {
+        id: made.uid,
+        uid: made.uid,
+        email: input.email.trim().toLowerCase(),
+        name: input.name,
+        role: input.role,
+        phone: input.phone,
+        active: true,
+        studentId: input.studentId,
+        staffId: input.staffId,
+        childStudentId: input.childStudentId,
+      };
+      await save("users", profile, `Created ${input.role} portal for ${profile.email}.`);
+      return null;
+    },
+    [save, user],
+  );
+
   const allowed = useCallback(
     (module: ModuleKey, action: "read" | "write" = "read") => {
       if (!user) return false;
-      return can(user.role as Role, module, action);
+      return can(user.role, module, action);
     },
     [user],
   );
@@ -341,10 +397,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const upload = useCallback((folder: string, id: string, file: File) => uploadPhoto(folder, id, file), []);
 
+  const authHeader = useCallback(async () => {
+    const token = await currentIdToken();
+    return (token ? { Authorization: `Bearer ${token}` } : {}) as HeadersInit;
+  }, []);
+
   const value = useMemo(
     () => ({
       ready,
       online,
+      syncStatus,
+      lastSyncedAt,
+      syncError,
       user,
       state,
       firebaseNote,
@@ -356,11 +420,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       scopedStudentId,
       save,
       remove,
+      archive,
       upload,
+      createPortalLogin,
+      authHeader,
     }),
     [
       ready,
       online,
+      syncStatus,
+      lastSyncedAt,
+      syncError,
       user,
       state,
       firebaseNote,
@@ -372,7 +442,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       scopedStudentId,
       save,
       remove,
+      archive,
       upload,
+      createPortalLogin,
+      authHeader,
     ],
   );
 

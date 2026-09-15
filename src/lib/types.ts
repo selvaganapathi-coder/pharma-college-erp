@@ -6,7 +6,6 @@ export type User = {
   id: string;
   uid?: string;
   email: string;
-  password: string;
   name: string;
   role: Role;
   phone: string;
@@ -66,6 +65,7 @@ export type Student = {
   photoUrl?: string;
   status: Status;
   busRouteId?: string;
+  deletedAt?: string;
 };
 
 export type Staff = {
@@ -81,6 +81,7 @@ export type Staff = {
   joinedOn: string;
   photoUrl?: string;
   status: Status;
+  deletedAt?: string;
 };
 
 export type TimetableSlot = {
@@ -129,6 +130,8 @@ export type FeePlan = {
   dueDate: string;
 };
 
+export type FeeStatus = "due" | "late" | "partial" | "paid" | "pending_gateway";
+
 export type Fee = {
   id: string;
   studentId: string;
@@ -136,12 +139,18 @@ export type Fee = {
   term: string;
   amount: number;
   dueDate: string;
-  status: "paid" | "due" | "late";
+  status: FeeStatus;
   paidAt?: string;
   method?: string;
   txnId?: string;
   receiptNo?: string;
+  gatewayOrderId?: string;
+  gatewayPaymentId?: string;
+  ledgerNote?: string;
+  deletedAt?: string;
 };
+
+export type AlertSeverity = "INFO" | "SUCCESS" | "WARNING" | "ERROR" | "URGENT";
 
 export type Notice = {
   id: string;
@@ -152,10 +161,14 @@ export type Notice = {
   sectionId?: string;
   studentId?: string;
   urgent: boolean;
+  severity: AlertSeverity;
   createdAt: string;
   createdBy: string;
-  status: "sent" | "queued" | "failed";
+  createdByName?: string;
+  status: "sent" | "queued" | "failed" | "not_configured";
   deliveryNote: string;
+  readBy?: string[];
+  archived?: boolean;
 };
 
 export type Message = {
@@ -187,6 +200,7 @@ export type Book = {
   author: string;
   copies: number;
   photoUrl?: string;
+  deletedAt?: string;
 };
 
 export type Checkout = {

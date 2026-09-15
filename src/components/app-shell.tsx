@@ -51,7 +51,7 @@ const NAV: { href: string; label: string; module: ModuleKey; icon: typeof Layout
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { ready, user, logout, online, state, firebaseNote } = useApp();
+  const { ready, user, logout, online, state, firebaseNote, syncStatus, lastSyncedAt, syncError } = useApp();
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -119,8 +119,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="truncate text-sm font-semibold text-primary">GP Pharmacy College</p>
           <p className="truncate text-xs text-muted-foreground">Academic operations portal</p>
         </div>
-        <Badge variant="outline" className="hidden sm:inline-flex">
-          {online ? "Live" : "Offline"}
+        <Badge variant="outline" className="hidden max-w-[140px] truncate sm:inline-flex" title={syncError ?? lastSyncedAt ?? syncStatus}>
+          {syncStatus === "synced" ? "Synced" : syncStatus === "syncing" ? "Syncing…" : syncStatus === "error" ? "Sync failed" : online ? "Cloud idle" : "Offline"}
         </Badge>
         <div className="hidden text-right text-xs sm:block">
           <p className="font-medium">{user.name}</p>
@@ -129,6 +129,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Button
           size="sm"
           variant="outline"
+          className="min-h-11"
           onClick={() => {
             logout();
             router.replace("/");

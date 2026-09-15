@@ -1,19 +1,8 @@
 # GP Pharmacy College ERP
 
-College operations portal for **GP Pharmacy College**. Crimson and gold on cream. The system starts empty — you enter live department, staff, and student records. There is no shared demo login.
+College operations portal for **GP Pharmacy College**. Firebase Authentication is the source of truth for passwords. There is no demo login and no fake payment success.
 
 Application repo: [github.com/selvaganapathi-coder/pharma-college-erp](https://github.com/selvaganapathi-coder/pharma-college-erp)
-
-## What you can do
-
-- Full add / view / edit / delete for students, staff, departments, courses, sections, timetable, exams, fees, books, and bus routes
-- Photo upload (student, staff, department, book cover, bus)
-- Linked lists: department → course → section → staff
-- Timetable editor, attendance, exam lock, fee plans, pay, print receipt
-- Library issue/return with overdue fine
-- Alerts on WhatsApp, SMS, email, in-app (MSG91/SMTP keys for live send)
-- Reports + CSV, audit log
-- Offline copy on this device + Firebase when signed in
 
 ## Run
 
@@ -27,23 +16,32 @@ npm run dev
 
 Open http://localhost:43123
 
-### First login
+```bash
+npm run lint
+npm run test
+npm run build
+```
 
-1. Open **Sign in** if you already created an admin. Use **Create the admin account** only once.
-2. After that, the same email works on any browser once Firebase Auth is on.
-3. Add departments, programmes, sections, then staff and students. Optional portal passwords create staff/student/parent sign-in.
+### First administrator
 
-## Firebase (pharmacy-98684)
+1. Sign in if an admin already exists.
+2. Create the first admin only when Firebase `meta/setup` does not exist.
+3. Publish `firestore.rules` and `storage.rules` from this repo.
 
-1. Authentication → enable **Email/Password**
-2. Authentication → Settings → **Authorized domains** — add `localhost` and your live site (Vercel domain)
-3. Create Firestore and Storage
-4. Publish `firestore.rules` and `storage.rules`
+### Firebase (pharmacy-98684)
 
-If Email/Password is off, or this site is not in Authorized domains, the admin is stored only in that browser and the create-admin screen appears again on the next device or preview URL.
+1. Authentication → enable Email/Password
+2. Authorized domains: `localhost` and your live host
+3. Firestore + Storage
+4. Publish the rules files in this repository
 
-## Live keys (optional)
+### Server keys (optional, required for live money/SMS)
 
-`.env.local`: `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`, `SMTP_HOST`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`
+| Variable | Purpose |
+| --- | --- |
+| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | Create and verify Razorpay orders |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Mark a fee **paid** in Firestore after signature verification |
+| `MSG91_AUTH_KEY` / `MSG91_TEMPLATE_ID` | SMS / WhatsApp to a student phone on file |
+| `SMTP_HOST` | Email (not implemented as a send transport yet; the API reports not configured honestly) |
 
-Without gateway keys, alerts are stored and queued, and fee checkout still issues a college receipt (card numbers are never stored).
+Without Razorpay keys, Pay shows a configuration error. The app never stores card numbers and never marks a fee paid because a browser request succeeded.

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { PhotoUpload } from "@/components/photo-upload";
@@ -15,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
+import { firstError, validateStudent } from "@/lib/validation";
+import { toast } from "sonner";
 import type { Student } from "@/lib/types";
 
 function blank(dept = "", course = "", section = ""): Student {
@@ -41,12 +44,12 @@ function blank(dept = "", course = "", section = ""): Student {
 }
 
 export default function StudentsPage() {
-  const { state, save, remove, allowed, scopedStudentId, upload } = useApp();
+  const { state, save, remove, allowed, scopedStudentId, upload, createPortalLogin } = useApp();
   const router = useRouter();
   const sid = scopedStudentId();
   const canWrite = allowed("students", "write") && !sid;
   const rows = useMemo(
-    () => (sid ? state.students.filter((s) => s.id === sid) : state.students),
+    () => (sid ? state.students.filter((s) => s.id === sid && !s.deletedAt) : state.students.filter((s) => !s.deletedAt)),
     [state.students, sid],
   );
   const [open, setOpen] = useState(false);
@@ -63,16 +66,24 @@ export default function StudentsPage() {
     <Guard module="students">
       <PageHeader
         title="Student records"
-        note="Admit real students. Choose department, then course, then section. Optional portal passwords create student and parent logins."
+        note="Admit real students. Optional portal passwords create Firebase Auth logins (not stored in Firestore)."
         action={
           canWrite ? (
-            <Button onClick={openNew}>Add student</Button>
+            <Button className="min-h-11" onClick={openNew}>Add student</Button>
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total students" value={`${rows.length}`} />
+        <StatCard title="Active" value={`${rows.filter((s) => s.status === "active").length}`} />
+        <StatCard title="New this month" value={`${rows.filter((s) => s.admissionDate.slice(0, 7) === new Date().toISOString().slice(0, 7)).length}`} />
+        <StatCard title="Left / inactive" value={`${rows.filter((s) => s.status === "left").length}`} />
+      </div>
       <DataTable
         rows={rows}
-        empty="No students yet. Add the first admission file."
+        empty="There are no students matching the selected filters."
+        emptyTitle="No students found"
+        mobileTitle={(r) => r.name}
         canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.rollNo} ${row.email} ${row.parentName}`.toLowerCase().includes(q)}
         onOpen={(r) => router.push(`/app/students/${r.id}`)}
@@ -243,40 +254,37 @@ export default function StudentsPage() {
             </div>
           </div>
           <Button
+            className="min-h-11"
             disabled={!form.rollNo || !form.name}
             onClick={async () => {
+              const errors = validateStudent(form);
+              const err = firstError(errors);
+              if (err) {
+                toast.error(err);
+                return;
+              }
               await save("students", form, `Saved student ${form.name} (${form.rollNo}).`);
               if (portalPassword && form.email) {
-                await save(
-                  "users",
-                  {
-                    id: uid("u"),
-                    email: form.email.toLowerCase(),
-                    password: portalPassword,
-                    name: form.name,
-                    role: "student",
-                    phone: form.phone,
-                    studentId: form.id,
-                    active: true,
-                  },
-                  `Created student login for ${form.email}.`,
-                );
+                const note = await createPortalLogin({
+                  email: form.email,
+                  password: portalPassword,
+                  name: form.name,
+                  role: "student",
+                  phone: form.phone,
+                  studentId: form.id,
+                });
+                if (note) toast.error(note);
               }
               if (parentPassword && form.parentEmail) {
-                await save(
-                  "users",
-                  {
-                    id: uid("u"),
-                    email: form.parentEmail.toLowerCase(),
-                    password: parentPassword,
-                    name: form.parentName,
-                    role: "parent",
-                    phone: form.parentPhone,
-                    childStudentId: form.id,
-                    active: true,
-                  },
-                  `Created parent login for ${form.parentEmail}.`,
-                );
+                const note = await createPortalLogin({
+                  email: form.parentEmail,
+                  password: parentPassword,
+                  name: form.parentName,
+                  role: "parent",
+                  phone: form.parentPhone,
+                  childStudentId: form.id,
+                });
+                if (note) toast.error(note);
               }
               setPortalPassword("");
               setParentPassword("");

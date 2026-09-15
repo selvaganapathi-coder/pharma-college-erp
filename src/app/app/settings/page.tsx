@@ -23,7 +23,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-2 text-sm">
             <p>Status: {isFirebaseConfigured() ? `On · ${firebaseProjectId()}` : "Off"}</p>
             {firebaseNote ? <p>{firebaseNote}</p> : null}
-            <p>Turn on Email/Password, create Firestore, publish firestore.rules and storage.rules.</p>
+            <p>Publish firestore.rules from this repo. Passwords are only in Firebase Auth.</p>
           </CardContent>
         </Card>
         <Card>
@@ -31,7 +31,7 @@ export default function SettingsPage() {
             <CardTitle>MSG91 WhatsApp and SMS</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p>Alerts page sends all channels. Set MSG91_AUTH_KEY and MSG91_TEMPLATE_ID in .env.local for live SMS/WhatsApp. SMTP_HOST for email.</p>
+            <p>SMS/WhatsApp send only to a selected student phone. MSG91 keys required. SMTP is reported as not implemented until a transport is added.</p>
           </CardContent>
         </Card>
         <Card>
@@ -39,7 +39,7 @@ export default function SettingsPage() {
             <CardTitle>Payment gateway</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p>Fee checkout and receipts are built. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET for live capture. Cards are not stored.</p>
+            <p>Razorpay Checkout collects money. FIREBASE_SERVICE_ACCOUNT_JSON is required to mark the fee paid after signature verification. Card numbers are never collected.</p>
           </CardContent>
         </Card>
         <Card>
