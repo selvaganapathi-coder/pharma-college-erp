@@ -2,6 +2,8 @@
 
 Full college ERP for **GP Pharmacy College**. Yellow screens, red text. Students, parents, staff, and admin each get the right pages.
 
+Application repo: [github.com/selvaganapathi-coder/pharma-college-erp](https://github.com/selvaganapathi-coder/pharma-college-erp)
+
 ## What you can do
 
 - Full **add / view / edit / delete** for students, staff, departments, courses, sections, timetable, exams, fees, books, and bus routes
@@ -16,6 +18,8 @@ Full college ERP for **GP Pharmacy College**. Yellow screens, red text. Students
 ## Run
 
 ```bash
+git clone https://github.com/selvaganapathi-coder/pharma-college-erp.git
+cd pharma-college-erp
 npm install
 npm run dev
 ```
