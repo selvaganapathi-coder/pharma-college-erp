@@ -36,15 +36,22 @@ Open [http://localhost:43123](http://localhost:43123).
 | Student | student@gppharmacy.edu |
 | Parent | parent@gppharmacy.edu |
 
-## Optional live services
+## Firebase (project pharmacy-98684)
 
-Copy `.env.example` to `.env.local`.
+The portal is wired to this Firebase project. First time in the [Firebase console](https://console.firebase.google.com/project/pharmacy-98684):
 
-- **Firebase**: Auth + Firestore sync of the college database
+1. Authentication → Sign-in method → enable **Email/Password**.
+2. Firestore Database → create the database (start in production).
+3. Firestore → Rules → paste `firestore.rules` from this repo and publish.
+
+Sign-in still uses the college demo emails. The first successful Firebase login creates that Auth user and uploads college data to `erp/state`.
+
+MSG91 WhatsApp/SMS is not connected yet.
+
+## Optional later
+
 - **MSG91**: WhatsApp and SMS from `/api/notify`
 - **Razorpay**: live fee capture from `/api/pay`
-
-Without these keys the app still works. Data is stored in IndexedDB on the device and queued when the network is down.
 
 ## Data shape (fast reads)
 

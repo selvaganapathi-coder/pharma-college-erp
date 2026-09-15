@@ -4,20 +4,21 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
-    function isAdmin() {
-      return signedIn() && request.auth.token.role == 'admin';
-    }
-    function isStaff() {
-      return signedIn() && request.auth.token.role in ['admin', 'staff'];
+
+    // College ERP blob. Any signed-in staff, student, or parent can sync.
+    // Role checks also run in the app.
+    match /erp/{doc} {
+      allow read, write: if signedIn();
     }
 
-    match /erp/{doc} {
+    match /users/{uid} {
       allow read: if signedIn();
-      allow write: if isStaff();
+      allow create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
     }
 
     match /auditLogs/{id} {
-      allow read: if isAdmin();
+      allow read: if signedIn();
       allow create: if signedIn();
       allow update, delete: if false;
     }

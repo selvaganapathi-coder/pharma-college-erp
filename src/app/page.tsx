@@ -23,14 +23,17 @@ export default function LoginPage() {
   const [email, setEmail] = useState("admin@gppharmacy.edu");
   const [password, setPassword] = useState("college123");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (ready && user) router.replace("/app");
   }, [ready, user, router]);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const msg = login(email, password);
+    setBusy(true);
+    const msg = await login(email, password);
+    setBusy(false);
     if (msg) setError(msg);
     else router.replace("/app");
   }
@@ -101,10 +104,13 @@ export default function LoginPage() {
                 />
               </div>
               {error ? <p className="text-sm text-[#C41E3A]">{error}</p> : null}
-              <Button type="submit" className="w-full bg-[#C41E3A] text-white hover:bg-[#9B1B30]">
-                Open my dashboard
+              <Button type="submit" disabled={busy} className="w-full bg-[#C41E3A] text-white hover:bg-[#9B1B30]">
+                {busy ? "Signing in…" : "Open my dashboard"}
               </Button>
-              <p className="text-center text-xs text-[#6B4A1F]">Demo password for all roles: college123</p>
+              <p className="text-center text-xs text-[#6B4A1F]">
+                Demo password for all roles: college123. Cloud save uses Firebase project pharmacy-98684. MSG91 is
+                not on yet.
+              </p>
             </form>
           </CardContent>
         </Card>

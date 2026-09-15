@@ -4,20 +4,20 @@ import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { isFirebaseConfigured } from "@/lib/firebase";
+import { isFirebaseConfigured, firebaseProjectId } from "@/lib/firebase";
 import { useApp } from "@/lib/app-context";
 
 export default function SettingsPage() {
-  const { state } = useApp();
+  const { state, firebaseNote } = useApp();
   const firebaseOn = isFirebaseConfigured();
-  const msg91 = Boolean(process.env.NEXT_PUBLIC_MSG91_READY);
+  const projectId = firebaseProjectId();
   const pay = Boolean(process.env.NEXT_PUBLIC_PAY_READY);
 
   return (
     <Guard module="settings">
       <PageHeader
         title="Settings and security"
-        note="Connect Firebase, MSG91, and a live payment key when you are ready. Until then the college portal works offline on this device."
+        note="Firebase is connected for this college. MSG91 WhatsApp and SMS can wait. Live fee keys are still optional."
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -25,10 +25,11 @@ export default function SettingsPage() {
             <CardTitle className="text-[#8B1528]">Firebase</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p>Status: {firebaseOn ? "Connected" : "Demo mode (IndexedDB on this browser)"}</p>
+            <p>Status: {firebaseOn ? `Connected · ${projectId}` : "Off"}</p>
+            {firebaseNote ? <p>{firebaseNote}</p> : null}
             <p>
-              Add NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_PROJECT_ID to sync the college database to
-              Cloud Firestore. Security rules ship in firestore.rules.
+              In the Firebase console, turn on Authentication → Email/Password, and create a Firestore database.
+              Paste the rules from firestore.rules so college data can sync.
             </p>
           </CardContent>
         </Card>
@@ -37,8 +38,8 @@ export default function SettingsPage() {
             <CardTitle className="text-[#8B1528]">MSG91 WhatsApp and SMS</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p>Status: {msg91 ? "Ready" : "Demo queue (no live send)"}</p>
-            <p>Set MSG91_AUTH_KEY and MSG91_SENDER on the server. Email uses EMAIL_FROM if you add SMTP later.</p>
+            <p>Status: Waiting. We will add this later.</p>
+            <p>Alerts still save in the app and as email/SMS queue notes until MSG91 keys are set.</p>
           </CardContent>
         </Card>
         <Card>

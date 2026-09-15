@@ -1,10 +1,10 @@
 "use client";
 
 import { openDB, type IDBPDatabase } from "idb";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import type { AppState } from "./types";
 import { makeSeed } from "./seed";
 import { getFirebase, isFirebaseConfigured } from "./firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 
 const DB_NAME = "gp-pharmacy-erp";
 const STORE = "kv";
@@ -27,20 +27,6 @@ function db() {
 }
 
 export async function loadState(): Promise<AppState> {
-  try {
-    const firebase = getFirebase();
-    if (firebase) {
-      const snap = await getDoc(doc(firebase.db, "erp", "state"));
-      if (snap.exists()) {
-        const remote = snap.data() as AppState;
-        await persistLocal(remote);
-        return remote;
-      }
-    }
-  } catch {
-    // Fall back to local copy when the network or Firebase is down.
-  }
-
   const local = await (await db()).get(STORE, STATE_KEY);
   if (local) return local as AppState;
   const seed = makeSeed();
@@ -48,16 +34,30 @@ export async function loadState(): Promise<AppState> {
   return seed;
 }
 
+export async function pullCloudState(): Promise<AppState | null> {
+  const firebase = getFirebase();
+  if (!firebase?.auth.currentUser) return null;
+  try {
+    const snap = await getDoc(doc(firebase.db, "erp", "state"));
+    if (!snap.exists()) return null;
+    const remote = snap.data() as AppState;
+    await persistLocal(remote);
+    return remote;
+  } catch {
+    return null;
+  }
+}
+
 export async function persistState(state: AppState) {
   const clean = JSON.parse(JSON.stringify(state)) as AppState;
   await persistLocal(clean);
   if (!navigator.onLine || !isFirebaseConfigured()) return;
+  const firebase = getFirebase();
+  if (!firebase?.auth.currentUser) return;
   try {
-    const firebase = getFirebase();
-    if (!firebase) return;
     await setDoc(doc(firebase.db, "erp", "state"), clean);
   } catch {
-    // Local save already succeeded. Sync will retry on the next write.
+    // Local save already succeeded. Sync will retry after the next signed-in write.
   }
 }
 

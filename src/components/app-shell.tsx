@@ -51,7 +51,7 @@ const NAV: { href: string; label: string; module: ModuleKey; icon: typeof Layout
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { ready, user, logout, online, state } = useApp();
+  const { ready, user, logout, online, state, firebaseNote } = useApp();
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -130,6 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Badge className={online ? "bg-[#EAB308] text-[#4A1C1C]" : "bg-white/20 text-white"}>
           {online ? "Online" : "Offline mode"}
         </Badge>
+        <Badge className="hidden bg-white/15 text-white sm:inline-flex">Firebase</Badge>
         <div className="hidden text-right text-xs sm:block">
           <p className="font-medium">{user.name}</p>
           <p className="text-white/80">{roleLabel(user.role)}</p>
@@ -151,7 +152,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         <aside className="sticky top-[61px] hidden h-[calc(100vh-61px)] w-56 shrink-0 overflow-y-auto border-r border-[#F0C94A] bg-white p-3 md:block">
           {renderNav()}
         </aside>
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          {firebaseNote ? (
+            <p className="mb-4 rounded-lg border border-[#F0C94A] bg-[#FFF3C4] px-3 py-2 text-sm text-[#4A1C1C]">
+              {firebaseNote}
+            </p>
+          ) : null}
+          {children}
+        </main>
       </div>
     </div>
   );
