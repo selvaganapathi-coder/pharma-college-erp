@@ -101,7 +101,7 @@ export default function TimetablePage() {
               slot={edit.slot}
               onClose={() => setEdit(null)}
               onSave={async (slot) => {
-                await save("timetable", slot, `Set ${slot.day} ${slot.period} for section ${sectionId}.`);
+                await save("timetable", slot, `Set ${slot.day} ${slot.period} for ${state.sections.find((s) => s.id === sectionId)?.name ?? "section"}.`);
                 setEdit(null);
               }}
               onDelete={

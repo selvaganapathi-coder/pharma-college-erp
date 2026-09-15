@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BookLabel, StudentLabel } from "@/components/ref-label";
+import { StudentSelect } from "@/components/linked-selects";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApp } from "@/lib/app-context";
@@ -111,8 +113,8 @@ export default function LibraryPage() {
               return !q || `${b?.title} ${s?.name}`.toLowerCase().includes(q);
             }}
             columns={[
-              { key: "book", header: "Book", cell: (r) => state.books.find((b) => b.id === r.bookId)?.title },
-              { key: "st", header: "Student", cell: (r) => state.students.find((s) => s.id === r.studentId)?.name },
+              { key: "book", header: "Book", cell: (r) => <BookLabel id={r.bookId} /> },
+              { key: "st", header: "Borrower", cell: (r) => <StudentLabel id={r.studentId} /> },
               { key: "due", header: "Due", cell: (r) => r.dueOn },
               {
                 key: "status",
@@ -200,9 +202,15 @@ export default function LibraryPage() {
           <div className="space-y-3">
             <div className="space-y-1">
               <Label>Book</Label>
-              <Select value={bookId} onValueChange={pick(setBookId)}>
+              <Select
+                value={bookId}
+                onValueChange={pick(setBookId)}
+                items={Object.fromEntries(state.books.map((b) => [b.id, b.title]))}
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>
+                    {(v: string | null) => state.books.find((b) => b.id === v)?.title ?? "Select book"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {state.books.map((b) => (
@@ -214,19 +222,11 @@ export default function LibraryPage() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Student</Label>
-              <Select value={studentId} onValueChange={pick(setStudentId)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {state.students.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <StudentSelect
+                students={state.students.filter((s) => !s.deletedAt).map((s) => ({ id: s.id, name: s.name, rollNo: s.rollNo }))}
+                value={studentId}
+                onChange={setStudentId}
+              />
             </div>
             <Button
               onClick={async () => {
@@ -241,7 +241,7 @@ export default function LibraryPage() {
                     issuedOn: new Date().toISOString().slice(0, 10),
                     dueOn: due.toISOString().slice(0, 10),
                   },
-                  `Issued book ${bookId} to ${studentId}.`,
+                  `Issued ${state.books.find((b) => b.id === bookId)?.title ?? "book"} to ${state.students.find((s) => s.id === studentId)?.name ?? "student"}.`,
                 );
                 setOutOpen(false);
               }}

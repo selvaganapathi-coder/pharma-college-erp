@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { CourseSelect, SectionSelect } from "@/components/linked-selects";
+import { SubjectLabel } from "@/components/ref-label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -75,7 +76,7 @@ export default function ExamsPage() {
       </div>
       {exam ? (
         <p className="mb-3 text-sm">
-          {exam.date} · {state.courses.find((c) => c.id === exam.courseId)?.name} · max {exam.maxMarks}
+          {exam.date} · <SubjectLabel id={exam.courseId} /> · max {exam.maxMarks}
           {canWrite ? (
             <Button
               size="sm"

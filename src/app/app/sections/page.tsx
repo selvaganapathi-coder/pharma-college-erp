@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { CourseSelect } from "@/components/linked-selects";
+import { CourseLabel } from "@/components/ref-label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ export default function SectionsPage() {
                   id: uid("s"),
                   name: "",
                   courseId: course?.id ?? "",
+                  batch: "",
                   year: 1,
                   room: "",
                   capacity: 40,
@@ -57,8 +59,8 @@ export default function SectionsPage() {
         onDelete={(r) => void remove("sections", r.id, `Deleted section ${r.name}.`)}
         columns={[
           { key: "name", header: "Section", cell: (r) => r.name },
-          { key: "course", header: "Course", cell: (r) => state.courses.find((c) => c.id === r.courseId)?.name },
-          { key: "year", header: "Year", cell: (r) => r.year },
+          { key: "course", header: "Course", cell: (r) => <CourseLabel id={r.courseId} /> },
+          { key: "batch", header: "Batch", cell: (r) => r.batch || `Year ${r.year}` },
           { key: "room", header: "Room", cell: (r) => r.room },
           { key: "cap", header: "Seats", cell: (r) => r.capacity },
           { key: "n", header: "Students", cell: (r) => state.students.filter((s) => s.sectionId === r.id).length },
@@ -79,7 +81,11 @@ export default function SectionsPage() {
               />
               <div className="space-y-1">
                 <Label>Name</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="A" />
+              </div>
+              <div className="space-y-1">
+                <Label>Batch</Label>
+                <Input value={form.batch ?? ""} onChange={(e) => setForm({ ...form, batch: e.target.value })} placeholder="2026–2030" />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">

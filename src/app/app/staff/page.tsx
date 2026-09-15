@@ -8,6 +8,7 @@ import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { PhotoUpload } from "@/components/photo-upload";
 import { CourseSelect, DepartmentSelect } from "@/components/linked-selects";
+import { DepartmentLabel } from "@/components/ref-label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -91,13 +92,13 @@ export default function StaffPage() {
           { key: "code", header: "Code", cell: (r) => r.staffCode },
           { key: "name", header: "Name", cell: (r) => r.name },
           { key: "title", header: "Title", cell: (r) => r.title },
-          { key: "dept", header: "Department", cell: (r) => state.departments.find((d) => d.id === r.departmentId)?.name },
+          { key: "dept", header: "Department", cell: (r) => <DepartmentLabel id={r.departmentId} /> },
           {
             key: "subs",
             header: "Subjects",
             cell: (r) =>
               r.courseIds
-                .map((id) => state.courses.find((c) => c.id === id)?.code)
+                .map((id) => state.courses.find((c) => c.id === id)?.name)
                 .filter(Boolean)
                 .join(", ") || "—",
           },
@@ -149,6 +150,7 @@ export default function StaffPage() {
                 courses={state.courses}
                 departmentId={form.departmentId}
                 kind="subject"
+                requireDepartment
                 value={subjectId}
                 onChange={(id) => {
                   setSubjectId(id);
@@ -181,7 +183,8 @@ export default function StaffPage() {
                     toast.error(err);
                     return;
                   }
-                  await save("staff", form, `Saved staff ${form.name}.`);
+                  const result = await save("staff", form, `Saved staff ${form.name}.`);
+                  if (!result.ok) return;
                   if (portalPassword && form.email) {
                     const note = await createPortalLogin({
                       email: form.email,

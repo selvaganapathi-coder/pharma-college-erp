@@ -1,11 +1,12 @@
 import type { Attendance, Book, BusRoute, Course, Exam, Fee, Mark, Staff, Student } from "./types";
+import { type CatalogSlice, validateStudentPlacement } from "./catalog";
 
 export type FieldErrors = Record<string, string>;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^[0-9+\-\s]{8,15}$/;
 
-export function validateStudent(s: Partial<Student>): FieldErrors {
+export function validateStudent(s: Partial<Student>, catalog?: CatalogSlice): FieldErrors {
   const e: FieldErrors = {};
   if (!s.rollNo?.trim()) e.rollNo = "Admission / roll number is required.";
   if (!s.name?.trim()) e.name = "Student name is required.";
@@ -13,10 +14,23 @@ export function validateStudent(s: Partial<Student>): FieldErrors {
   if (!s.gender) e.gender = "Gender is required.";
   if (!s.phone?.trim() || !PHONE.test(s.phone.trim())) e.phone = "Enter a valid phone number.";
   if (!s.email?.trim() || !EMAIL.test(s.email.trim())) e.email = "Enter a valid email.";
-  if (!s.courseId) e.courseId = "Programme is required.";
-  if (!s.sectionId) e.sectionId = "Section is required.";
-  if (!s.departmentId) e.departmentId = "Department is required.";
+  if (!s.parentName?.trim()) e.parentName = "Parent / guardian name is required.";
+  if (!s.parentPhone?.trim() || !PHONE.test(s.parentPhone.trim())) e.parentPhone = "Enter a valid parent / guardian phone.";
+  if (s.parentEmail?.trim() && !EMAIL.test(s.parentEmail.trim())) e.parentEmail = "Enter a valid parent email, or leave it blank.";
+  if (!s.address?.trim()) e.address = "Address is required.";
   if (!s.status) e.status = "Admission status is required.";
+  Object.assign(e, catalog ? validateStudentPlacement(s, catalog) : {
+    ...(s.courseId ? {} : { courseId: "Programme is required." }),
+    ...(s.sectionId ? {} : { sectionId: "Section is required." }),
+    ...(s.departmentId ? {} : { departmentId: "Department is required." }),
+  });
+  return e;
+}
+
+export function validatePortalPassword(password: string, email: string) {
+  const e: FieldErrors = {};
+  if (!email.trim() || !EMAIL.test(email.trim())) e.email = "A valid email is required to create a login.";
+  if (password.length < 8) e.password = "Portal password must be at least 8 characters.";
   return e;
 }
 

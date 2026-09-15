@@ -7,20 +7,24 @@ import { StatCard } from "@/components/stat-card";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { PhotoUpload } from "@/components/photo-upload";
-import { CourseSelect, DepartmentSelect, SectionSelect } from "@/components/linked-selects";
+import { BatchSelect, CourseSelect, DepartmentSelect, SectionSelect } from "@/components/linked-selects";
+import { CourseLabel, DepartmentLabel, SectionLabel } from "@/components/ref-label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApp } from "@/lib/app-context";
+import { batchLabel, nextPlacementAfterBatch, nextPlacementAfterCourse, nextPlacementAfterDepartment } from "@/lib/catalog";
+import { studentSearchText } from "@/lib/references";
 import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
 import { firstError, validateStudent } from "@/lib/validation";
 import { toast } from "sonner";
 import type { Student } from "@/lib/types";
 
-function blank(dept = "", course = "", section = ""): Student {
+function blank(): Student {
   return {
     id: uid("st"),
     rollNo: "",
@@ -33,10 +37,11 @@ function blank(dept = "", course = "", section = ""): Student {
     parentName: "",
     parentPhone: "",
     parentEmail: "",
-    departmentId: dept,
-    courseId: course,
-    sectionId: section,
+    departmentId: "",
+    courseId: "",
+    sectionId: "",
     year: 1,
+    batch: "",
     address: "",
     admissionDate: new Date().toISOString().slice(0, 10),
     status: "active",
@@ -44,29 +49,80 @@ function blank(dept = "", course = "", section = ""): Student {
 }
 
 export default function StudentsPage() {
-  const { state, save, remove, allowed, scopedStudentId, upload, createPortalLogin } = useApp();
+  const { state, save, remove, allowed, scopedStudentId, upload, createStudent } = useApp();
   const router = useRouter();
   const sid = scopedStudentId();
   const canWrite = allowed("students", "write") && !sid;
-  const rows = useMemo(
+  const catalog = { departments: state.departments, courses: state.courses, sections: state.sections };
+  const allRows = useMemo(
     () => (sid ? state.students.filter((s) => s.id === sid && !s.deletedAt) : state.students.filter((s) => !s.deletedAt)),
     [state.students, sid],
   );
+  const [deptFilter, setDeptFilter] = useState("");
+  const [courseFilter, setCourseFilter] = useState("");
+  const [batchFilter, setBatchFilter] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
+  const rows = useMemo(
+    () =>
+      allRows.filter((s) => {
+        if (deptFilter && s.departmentId !== deptFilter) return false;
+        if (courseFilter && s.courseId !== courseFilter) return false;
+        if (batchFilter && (s.batch || batchLabel(state.sections.find((sec) => sec.id === s.sectionId) ?? { batch: "", year: s.year })) !== batchFilter) return false;
+        if (sectionFilter && s.sectionId !== sectionFilter) return false;
+        return true;
+      }),
+    [allRows, batchFilter, courseFilter, deptFilter, sectionFilter, state.sections],
+  );
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Student>(blank());
+  const [isNew, setIsNew] = useState(true);
+  const [createLogin, setCreateLogin] = useState(false);
+  const [createParentLogin, setCreateParentLogin] = useState(false);
   const [portalPassword, setPortalPassword] = useState("");
   const [parentPassword, setParentPassword] = useState("");
+  const [saving, setSaving] = useState(false);
 
   function openNew() {
-    setForm(blank(state.departments[0]?.id, state.courses.find((c) => c.kind === "programme")?.id, state.sections[0]?.id));
+    setForm(blank());
+    setIsNew(true);
+    setCreateLogin(false);
+    setCreateParentLogin(false);
+    setPortalPassword("");
+    setParentPassword("");
     setOpen(true);
   }
+
+  const deptOptions = [{ id: "", label: "All departments" }, ...state.departments.map((d) => ({ id: d.id, label: d.name }))];
+  const courseOptions = [
+    { id: "", label: "All courses" },
+    ...state.courses
+      .filter((c) => !deptFilter || c.departmentId === deptFilter)
+      .filter((c) => c.kind === "programme" || !state.courses.some((x) => x.kind === "programme" && x.departmentId === c.departmentId))
+      .map((c) => ({ id: c.id, label: c.code ? `${c.code} · ${c.name}` : c.name })),
+  ];
+  const batchOptions = [
+    { id: "", label: "All batches" },
+    ...Array.from(
+      new Set(
+        state.sections
+          .filter((s) => !courseFilter || s.courseId === courseFilter)
+          .map((s) => batchLabel(s)),
+      ),
+    ).map((label) => ({ id: label, label })),
+  ];
+  const sectionOptions = [
+    { id: "", label: "All sections" },
+    ...state.sections
+      .filter((s) => !courseFilter || s.courseId === courseFilter)
+      .filter((s) => !batchFilter || batchLabel(s) === batchFilter)
+      .map((s) => ({ id: s.id, label: s.name })),
+  ];
 
   return (
     <Guard module="students">
       <PageHeader
         title="Student records"
-        note="Admit real students. Optional portal passwords create Firebase Auth logins (not stored in Firestore)."
+        note="Admit students with department, course, batch, and section. Optional Firebase login is created only when you tick Create student login — the password is never stored on the student record."
         action={
           canWrite ? (
             <Button className="min-h-11" onClick={openNew}>Add student</Button>
@@ -79,23 +135,38 @@ export default function StudentsPage() {
         <StatCard title="New this month" value={`${rows.filter((s) => s.admissionDate.slice(0, 7) === new Date().toISOString().slice(0, 7)).length}`} />
         <StatCard title="Left / inactive" value={`${rows.filter((s) => s.status === "left").length}`} />
       </div>
+      {sid ? null : (
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <FilterSelect label="Department" value={deptFilter} options={deptOptions} onChange={(id) => { setDeptFilter(id); setCourseFilter(""); setBatchFilter(""); setSectionFilter(""); }} />
+          <FilterSelect label="Course" value={courseFilter} options={courseOptions} onChange={(id) => { setCourseFilter(id); setBatchFilter(""); setSectionFilter(""); }} />
+          <FilterSelect label="Batch" value={batchFilter} options={batchOptions} onChange={(id) => { setBatchFilter(id); setSectionFilter(""); }} />
+          <FilterSelect label="Section" value={sectionFilter} options={sectionOptions} onChange={setSectionFilter} />
+        </div>
+      )}
       <DataTable
         rows={rows}
         empty="There are no students matching the selected filters."
         emptyTitle="No students found"
         mobileTitle={(r) => r.name}
         canWrite={canWrite}
-        filter={(row, q) => !q || `${row.name} ${row.rollNo} ${row.email} ${row.parentName}`.toLowerCase().includes(q)}
+        filter={(row, q) => !q || studentSearchText(state, row).includes(q)}
         onOpen={(r) => router.push(`/app/students/${r.id}`)}
         onEdit={(r) => {
-          setForm(r);
+          const section = state.sections.find((s) => s.id === r.sectionId);
+          setForm({ ...r, batch: r.batch || (section ? batchLabel(section) : "") });
+          setIsNew(false);
+          setCreateLogin(false);
+          setCreateParentLogin(false);
+          setPortalPassword("");
+          setParentPassword("");
           setOpen(true);
         }}
-        onDelete={(r) => void remove("students", r.id, `Deleted student ${r.name}.`)}
+        onDelete={(r) => void remove("students", r.id, `Archived student ${r.name}.`)}
         columns={[
           {
             key: "photo",
             header: "Photo",
+            hideOnMobile: true,
             cell: (r) =>
               r.photoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -104,18 +175,20 @@ export default function StudentsPage() {
                 "—"
               ),
           },
-          { key: "roll", header: "Roll no.", cell: (r) => r.rollNo },
+          { key: "roll", header: "Admission no.", cell: (r) => r.rollNo },
           { key: "name", header: "Name", cell: (r) => r.name },
-          { key: "course", header: "Course", cell: (r) => state.courses.find((c) => c.id === r.courseId)?.name },
-          { key: "sec", header: "Section", cell: (r) => state.sections.find((s) => s.id === r.sectionId)?.name },
-          { key: "parent", header: "Parent", cell: (r) => r.parentPhone },
+          { key: "dept", header: "Department", cell: (r) => <DepartmentLabel id={r.departmentId} /> },
+          { key: "course", header: "Course", cell: (r) => <CourseLabel id={r.courseId} /> },
+          { key: "batch", header: "Batch", cell: (r) => r.batch || batchLabel(state.sections.find((s) => s.id === r.sectionId) ?? { batch: "", year: r.year }) },
+          { key: "sec", header: "Section", cell: (r) => <SectionLabel id={r.sectionId} /> },
+          { key: "parent", header: "Parent", cell: (r) => r.parentName || r.parentPhone },
           { key: "status", header: "Status", cell: (r) => r.status },
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{rows.some((r) => r.id === form.id) ? "Edit student" : "New student"}</DialogTitle>
+            <DialogTitle>{isNew ? "New student" : "Edit student"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
             <PhotoUpload
@@ -125,7 +198,7 @@ export default function StudentsPage() {
               onFile={(file) => upload("students", form.id, file)}
             />
             <div className="space-y-1">
-              <Label>Roll number</Label>
+              <Label>Admission number</Label>
               <Input value={form.rollNo} onChange={(e) => setForm({ ...form, rollNo: e.target.value })} />
             </div>
             <div className="space-y-1">
@@ -150,7 +223,7 @@ export default function StudentsPage() {
             </div>
             <div className="space-y-1">
               <Label>Gender</Label>
-              <Select value={form.gender} onValueChange={pick((v) => setForm({ ...form, gender: v as Student["gender"] }))}>
+              <Select value={form.gender} onValueChange={pick((v) => setForm({ ...form, gender: v as Student["gender"] }))} items={{ Female: "Female", Male: "Male" }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -163,30 +236,31 @@ export default function StudentsPage() {
             <DepartmentSelect
               departments={state.departments}
               value={form.departmentId}
-              onChange={(id) => {
-                const course = state.courses.find((c) => c.departmentId === id && c.kind === "programme");
-                const section = state.sections.find((s) => s.courseId === course?.id);
-                setForm({ ...form, departmentId: id, courseId: course?.id ?? "", sectionId: section?.id ?? "" });
-              }}
+              onChange={(id) => setForm({ ...form, ...nextPlacementAfterDepartment(catalog, id) })}
             />
             <CourseSelect
               courses={state.courses}
               departmentId={form.departmentId}
               kind="programme"
+              requireDepartment
               value={form.courseId}
-              onChange={(id) => {
-                const course = state.courses.find((c) => c.id === id);
-                const section = state.sections.find((s) => s.courseId === id);
-                setForm({ ...form, courseId: id, year: course?.years ? 1 : form.year, sectionId: section?.id ?? "" });
-              }}
+              onChange={(id) => setForm({ ...form, ...nextPlacementAfterCourse(catalog, form.departmentId, id) })}
+            />
+            <BatchSelect
+              sections={state.sections}
+              courseId={form.courseId}
+              value={form.batch ?? ""}
+              onChange={(id) => setForm({ ...form, ...nextPlacementAfterBatch(catalog, form.courseId, id) })}
             />
             <SectionSelect
               sections={state.sections}
+              courses={state.courses}
               courseId={form.courseId}
+              batch={form.batch}
               value={form.sectionId}
               onChange={(id) => {
                 const sec = state.sections.find((s) => s.id === id);
-                setForm({ ...form, sectionId: id, year: sec?.year ?? form.year });
+                setForm({ ...form, sectionId: id, year: sec?.year ?? form.year, batch: sec ? batchLabel(sec) : form.batch });
               }}
             />
             <div className="space-y-1">
@@ -198,7 +272,7 @@ export default function StudentsPage() {
               <Input type="date" value={form.admissionDate} onChange={(e) => setForm({ ...form, admissionDate: e.target.value })} />
             </div>
             <div className="space-y-1">
-              <Label>Parent name</Label>
+              <Label>Parent / guardian name</Label>
               <Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} />
             </div>
             <div className="space-y-1">
@@ -218,6 +292,7 @@ export default function StudentsPage() {
               <Select
                 value={form.busRouteId ?? "none"}
                 onValueChange={pick((v) => setForm({ ...form, busRouteId: v === "none" ? undefined : v }))}
+                items={{ none: "No bus", ...Object.fromEntries(state.routes.map((r) => [r.id, `${r.name} · ${r.vehicleNo}`])) }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -226,7 +301,7 @@ export default function StudentsPage() {
                   <SelectItem value="none">No bus</SelectItem>
                   {state.routes.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      {r.name}
+                      {r.name} · {r.vehicleNo}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -234,7 +309,7 @@ export default function StudentsPage() {
             </div>
             <div className="space-y-1">
               <Label>Status</Label>
-              <Select value={form.status} onValueChange={pick((v) => setForm({ ...form, status: v as Student["status"] }))}>
+              <Select value={form.status} onValueChange={pick((v) => setForm({ ...form, status: v as Student["status"] }))} items={{ active: "Active", left: "Left" }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -244,57 +319,118 @@ export default function StudentsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>Student portal password</Label>
-              <Input type="password" value={portalPassword} onChange={(e) => setPortalPassword(e.target.value)} placeholder="Optional" />
-            </div>
-            <div className="space-y-1">
-              <Label>Parent portal password</Label>
-              <Input type="password" value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} placeholder="Optional" />
+            <div className="sm:col-span-2 space-y-3 rounded-xl border border-border p-3">
+              <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+                <Checkbox checked={createLogin} onCheckedChange={(v) => setCreateLogin(Boolean(v))} />
+                Create student login
+              </label>
+              {createLogin ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Login email</Label>
+                    <Input value={form.email} readOnly />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Temporary password</Label>
+                    <Input type="password" value={portalPassword} onChange={(e) => setPortalPassword(e.target.value)} placeholder="Min. 8 characters" />
+                  </div>
+                  <p className="sm:col-span-2 text-xs text-muted-foreground">
+                    Password is sent only to Firebase Authentication. It is not saved in Firestore or this browser after you close the form.
+                  </p>
+                </div>
+              ) : null}
+              <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+                <Checkbox checked={createParentLogin} onCheckedChange={(v) => setCreateParentLogin(Boolean(v))} />
+                Create parent login
+              </label>
+              {createParentLogin ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Parent login email</Label>
+                    <Input value={form.parentEmail} readOnly />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Temporary password</Label>
+                    <Input type="password" value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} placeholder="Min. 8 characters" />
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
           <Button
             className="min-h-11"
-            disabled={!form.rollNo || !form.name}
+            disabled={saving}
             onClick={async () => {
-              const errors = validateStudent(form);
+              const errors = validateStudent(form, catalog);
               const err = firstError(errors);
               if (err) {
                 toast.error(err);
                 return;
               }
-              await save("students", form, `Saved student ${form.name} (${form.rollNo}).`);
-              if (portalPassword && form.email) {
-                const note = await createPortalLogin({
-                  email: form.email,
-                  password: portalPassword,
-                  name: form.name,
-                  role: "student",
-                  phone: form.phone,
-                  studentId: form.id,
-                });
-                if (note) toast.error(note);
+              setSaving(true);
+              try {
+                if (isNew || createLogin || createParentLogin) {
+                  const note = await createStudent({
+                    student: form,
+                    createLogin,
+                    password: portalPassword,
+                    createParentLogin,
+                    parentPassword,
+                  });
+                  if (note) {
+                    toast.error(note);
+                    return;
+                  }
+                } else {
+                  const result = await save("students", form, `Saved student ${form.name} (${form.rollNo}).`);
+                  if (!result.ok) return;
+                }
+                toast.success(isNew ? "Student created." : "Student updated.");
+                setPortalPassword("");
+                setParentPassword("");
+                setOpen(false);
+              } finally {
+                setSaving(false);
               }
-              if (parentPassword && form.parentEmail) {
-                const note = await createPortalLogin({
-                  email: form.parentEmail,
-                  password: parentPassword,
-                  name: form.parentName,
-                  role: "parent",
-                  phone: form.parentPhone,
-                  childStudentId: form.id,
-                });
-                if (note) toast.error(note);
-              }
-              setPortalPassword("");
-              setParentPassword("");
-              setOpen(false);
             }}
           >
-            Save student
+            {saving ? "Saving…" : "Save student"}
           </Button>
         </DialogContent>
       </Dialog>
     </Guard>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { id: string; label: string }[];
+  onChange: (id: string) => void;
+}) {
+  const items = Object.fromEntries(options.map((o) => [o.id || "all", o.label]));
+  return (
+    <div className="space-y-1">
+      <Label>{label}</Label>
+      <Select value={value || "all"} onValueChange={pick((v) => onChange(v === "all" ? "" : v))} items={items}>
+        <SelectTrigger className="h-11 w-full min-h-11">
+          <SelectValue>
+            {(selected: string | null) => items[selected ?? "all"] ?? label}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.id || "all"} value={o.id || "all"}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

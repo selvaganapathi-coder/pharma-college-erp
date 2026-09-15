@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { DepartmentSelect } from "@/components/linked-selects";
+import { DepartmentLabel } from "@/components/ref-label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -61,7 +62,7 @@ export default function CoursesPage() {
           { key: "code", header: "Code", cell: (r) => r.code },
           { key: "name", header: "Name", cell: (r) => r.name },
           { key: "kind", header: "Type", cell: (r) => r.kind },
-          { key: "dept", header: "Department", cell: (r) => state.departments.find((d) => d.id === r.departmentId)?.name },
+          { key: "dept", header: "Department", cell: (r) => <DepartmentLabel id={r.departmentId} /> },
           { key: "years", header: "Years", cell: (r) => r.years },
           { key: "credits", header: "Credits", cell: (r) => r.credits },
         ]}

@@ -49,12 +49,13 @@ service cloud.firestore {
         && request.resource.data.role == 'admin'
         && request.resource.data.active == true
         && !request.resource.data.keys().hasAny(['password']);
-      allow create: if isAdmin()
+      allow create: if isOffice()
         && request.resource.data.role in ['staff', 'student', 'parent']
+        && request.resource.data.role != 'admin'
         && !request.resource.data.keys().hasAny(['password']);
       allow update: if isAdmin()
         && !request.resource.data.keys().hasAny(['password'])
-        && (request.resource.data.role == resource.data.role || isAdmin());
+        && request.resource.data.role == resource.data.role;
       allow update: if signedIn() && request.auth.uid == userId
         && request.resource.data.role == resource.data.role
         && request.resource.data.active == resource.data.active
@@ -78,11 +79,28 @@ service cloud.firestore {
       allow read: if isOffice();
       allow write: if isAdmin();
     }
+    function validStudentWrite() {
+      return request.resource.data.departmentId is string
+        && request.resource.data.courseId is string
+        && request.resource.data.sectionId is string
+        && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
+        && exists(/databases/$(database)/documents/courses/$(request.resource.data.courseId))
+        && exists(/databases/$(database)/documents/sections/$(request.resource.data.sectionId))
+        && get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.departmentId == request.resource.data.departmentId
+        && get(/databases/$(database)/documents/sections/$(request.resource.data.sectionId)).data.courseId == request.resource.data.courseId
+        && !request.resource.data.keys().hasAny(['password']);
+    }
+
     match /students/{id} {
       allow get: if isOffice() || (scopedStudent() && myStudentId() == id);
       allow list: if isOffice();
-      allow create, update: if isOffice()
+      allow create: if isOffice()
+        && validStudentWrite()
         && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status in ['active', 'left']);
+      allow update: if isOffice()
+        && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status in ['active', 'left'])
+        && !request.resource.data.keys().hasAny(['password'])
+        && (validStudentWrite() || request.resource.data.deletedAt is string);
       allow delete: if isAdmin();
     }
     match /timetable/{id} {

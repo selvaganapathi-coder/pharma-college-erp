@@ -40,6 +40,8 @@ export type Section = {
   name: string;
   courseId: string;
   year: number;
+  /** Intake / batch label such as 2026–2030. Falls back to year when empty. */
+  batch?: string;
   room: string;
   capacity: number;
 };
@@ -60,11 +62,16 @@ export type Student = {
   courseId: string;
   sectionId: string;
   year: number;
+  /** Intake label such as 2026–2030. Stored separately from the section id. */
+  batch?: string;
   address: string;
   admissionDate: string;
   photoUrl?: string;
   status: Status;
   busRouteId?: string;
+  /** Firebase Auth UID when a portal login exists. Never a password. */
+  authUid?: string;
+  parentAuthUid?: string;
   deletedAt?: string;
 };
 

@@ -47,7 +47,7 @@ export default function AttendancePage() {
         status,
         markedBy: user?.staffId ?? user?.id ?? "",
       },
-      `Marked attendance ${status} for ${studentId} on ${date}.`,
+      `Marked ${status} for ${state.students.find((s) => s.id === studentId)?.name ?? "student"} on ${date}.`,
     );
   }
 

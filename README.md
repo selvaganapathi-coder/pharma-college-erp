@@ -28,6 +28,14 @@ npm run build
 2. Create the first admin only when Firebase `meta/setup` does not exist.
 3. Publish `firestore.rules` and `storage.rules` from this repo.
 
+### Students
+
+Admit from **Students → Add student**. Department, course, batch, and section are linked dropdowns that show names, not document ids.
+
+Tick **Create student login** to provision a Firebase Authentication user. The password is sent only to Firebase Auth (via the server Identity Toolkit API) and is never written to the student Firestore document. The college profile is `users/{uid}` with `role = student` and `studentId` pointing at the student record.
+
+Student sessions load only that student's document and related fees, attendance, marks, and library checkouts. Changing a URL to another student id is blocked.
+
 ### Firebase (pharmacy-98684)
 
 1. Authentication → enable Email/Password

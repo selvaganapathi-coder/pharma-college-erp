@@ -7,7 +7,7 @@ import { Guard } from "@/components/guard";
 import { StatCard } from "@/components/stat-card";
 import { AlertCard, severityRank } from "@/components/alert-card";
 import { EmptyState } from "@/components/empty-state";
-import { SectionSelect } from "@/components/linked-selects";
+import { SectionSelect, StudentSelect } from "@/components/linked-selects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -148,17 +148,11 @@ export default function AlertsPage() {
             </div>
             {audience === "Section" ? <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} /> : null}
             {audience === "Student" ? (
-              <div className="space-y-1">
-                <Label>Student</Label>
-                <Select value={studentId} onValueChange={pick(setStudentId)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {state.students.filter((s) => !s.deletedAt).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <StudentSelect
+                students={state.students.filter((s) => !s.deletedAt).map((s) => ({ id: s.id, name: s.name, rollNo: s.rollNo }))}
+                value={studentId}
+                onChange={setStudentId}
+              />
             ) : null}
           </div>
           <div className="flex flex-wrap gap-4">

@@ -2,10 +2,111 @@ import { describe, expect, it } from "vitest";
 import { firstError, validateAttendance, validateFee, validateMark, validateStudent } from "@/lib/validation";
 import { can } from "@/lib/rbac";
 import { mergeCloud } from "@/lib/sync";
-import { EMPTY_STATE } from "@/lib/types";
+import { EMPTY_STATE, type AppState } from "@/lib/types";
 import { verifyRazorpaySignature } from "@/lib/server/razorpay";
 import { severityRank } from "@/components/alert-card";
+import { nextPlacementAfterDepartment, programmesForDepartment, validateStudentPlacement } from "@/lib/catalog";
+import { getCourseName, getDepartmentName, getSectionName, getStudentName } from "@/lib/references";
 import crypto from "crypto";
+
+const catalog = {
+  departments: [{ id: "d-pharm", code: "PH", name: "Pharmacy", head: "Dean" }],
+  courses: [
+    { id: "c-bpharm", code: "BPH", name: "B.Pharm", departmentId: "d-pharm", years: 4, credits: 160, kind: "programme" as const },
+    { id: "c-other", code: "OTH", name: "Other", departmentId: "d-x", years: 2, credits: 40, kind: "programme" as const },
+  ],
+  sections: [{ id: "s-a", name: "A", courseId: "c-bpharm", year: 1, batch: "2026–2030", room: "101", capacity: 40 }],
+};
+
+describe("validation", () => {
+  it("rejects an incomplete student", () => {
+    expect(firstError(validateStudent({}))).toBeTruthy();
+  });
+  it("rejects a course from another department", () => {
+    const errors = validateStudentPlacement(
+      { departmentId: "d-pharm", courseId: "c-other", sectionId: "s-a" },
+      catalog,
+    );
+    expect(errors.courseId).toMatch(/department/);
+  });
+  it("accepts a matching department, course, and section", () => {
+    expect(
+      firstError(
+        validateStudentPlacement(
+          { departmentId: "d-pharm", courseId: "c-bpharm", sectionId: "s-a", batch: "2026–2030" },
+          catalog,
+        ),
+      ),
+    ).toBeNull();
+  });
+  it("rejects marks over the maximum", () => {
+    expect(validateMark({ studentId: "s", examId: "e", marks: 40 }, 30).marks).toMatch(/exceed/);
+  });
+  it("rejects zero fee amount", () => {
+    expect(validateFee({ studentId: "s", term: "T", amount: 0, dueDate: "2026-01-01", status: "due" }).amount).toBeTruthy();
+  });
+  it("rejects invalid attendance status", () => {
+    expect(validateAttendance({ studentId: "s", date: "2026-01-01", courseId: "c", status: "maybe" as never }).status).toBeTruthy();
+  });
+});
+
+describe("catalog cascade", () => {
+  it("lists programmes for a department by name relationship", () => {
+    expect(programmesForDepartment(catalog.courses, "d-pharm").map((c) => c.name)).toEqual(["B.Pharm"]);
+  });
+  it("clears course when the department has more than one programme", () => {
+    const extra = {
+      ...catalog,
+      courses: [
+        ...catalog.courses,
+        { id: "c-dpharm", code: "DPH", name: "D.Pharm", departmentId: "d-pharm", years: 2, credits: 80, kind: "programme" as const },
+      ],
+    };
+    const next = nextPlacementAfterDepartment(extra, "d-pharm");
+    expect(next.courseId).toBe("");
+    expect(next.sectionId).toBe("");
+  });
+});
+
+describe("reference labels", () => {
+  const state = {
+    ...EMPTY_STATE,
+    ...catalog,
+    students: [
+      {
+        id: "st-1",
+        rollNo: "BPH20260021",
+        name: "Priya S",
+        email: "priya@x",
+        phone: "1234567890",
+        gender: "Female" as const,
+        dob: "2006-01-01",
+        bloodGroup: "O+",
+        parentName: "Parent",
+        parentPhone: "1234567890",
+        parentEmail: "",
+        departmentId: "d-pharm",
+        courseId: "c-bpharm",
+        sectionId: "s-a",
+        year: 1,
+        address: "Hosur",
+        admissionDate: "2026-01-01",
+        status: "active" as const,
+      },
+    ],
+  } as AppState;
+  it("resolves department, course, and section names instead of ids", () => {
+    expect(getDepartmentName(state, "d-pharm")).toBe("Pharmacy");
+    expect(getCourseName(state, "c-bpharm")).toContain("B.Pharm");
+    expect(getSectionName(state, "s-a")).toContain("A");
+    expect(getSectionName(state, "s-a")).not.toBe("s-a");
+    expect(getStudentName(state, "st-1")).toBe("Priya S");
+  });
+  it("uses a safe fallback for missing ids", () => {
+    expect(getDepartmentName(state, "missing")).toBe("Unknown Department");
+    expect(getStudentName(state, "nope")).toBe("Unknown Student");
+  });
+});
 
 describe("validation", () => {
   it("rejects an incomplete student", () => {

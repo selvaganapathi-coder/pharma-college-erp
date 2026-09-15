@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/lib/app-context";
+import { getCourseName, getSectionName } from "@/lib/references";
 import { roleLabel } from "@/lib/rbac";
 import type { AlertSeverity } from "@/lib/types";
 
@@ -52,7 +53,7 @@ export default function DashboardPage() {
             icon={<Receipt className="size-4" />}
           />
           <StatCard title="Books out" value={`${state.checkouts.filter((c) => c.studentId === sid && !c.returnedOn).length}`} note="Library" />
-          <StatCard title="Section" value={state.sections.find((s) => s.id === myStudent?.sectionId)?.name ?? "—"} note={state.courses.find((c) => c.id === myStudent?.courseId)?.name ?? "Not assigned"} />
+          <StatCard title="Section" value={getSectionName(state, myStudent?.sectionId)} note={getCourseName(state, myStudent?.courseId)} />
         </div>
         <div className="mt-6 space-y-3">
           {important.length === 0 ? <p className="text-sm text-muted-foreground">No alerts yet.</p> : important.map((n) => <AlertCard key={n.id} notice={n} />)}

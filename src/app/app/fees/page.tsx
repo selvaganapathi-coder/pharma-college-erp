@@ -151,7 +151,7 @@ export default function FeesPage() {
               <div>
                 <p className="font-semibold">{p.name}</p>
                 <p className="text-xs">
-                  {state.courses.find((c) => c.id === p.courseId)?.name} year {p.year} · ₹{p.amount.toLocaleString("en-IN")}
+                  {state.courses.find((c) => c.id === p.courseId)?.name ?? "Unknown Course"} year {p.year} · ₹{p.amount.toLocaleString("en-IN")}
                 </p>
               </div>
               <div className="flex gap-1">
@@ -179,7 +179,7 @@ export default function FeesPage() {
             header: "Student",
             cell: (r) => {
               const st = state.students.find((s) => s.id === r.studentId);
-              return `${st?.name ?? ""} · ${st?.rollNo ?? ""}`;
+              return st ? `${st.name} · ${st.rollNo}` : "Unknown Student";
             },
           },
           { key: "term", header: "Bill", cell: (r) => r.term },
@@ -216,7 +216,8 @@ export default function FeesPage() {
             <div id="receipt" className="space-y-2 text-sm">
               <p className="text-lg font-bold">GP Pharmacy College</p>
               <p>Receipt {receipt.receiptNo}</p>
-              <p>Student: {state.students.find((s) => s.id === receipt.studentId)?.name}</p>
+              <p>Student: {state.students.find((s) => s.id === receipt.studentId)?.name ?? "Unknown Student"}</p>
+              <p>Admission No: {state.students.find((s) => s.id === receipt.studentId)?.rollNo ?? "—"}</p>
               <p>Bill: {receipt.term}</p>
               <p>Amount: ₹{receipt.amount.toLocaleString("en-IN")}</p>
               <p>Paid on: {receipt.paidAt} · {receipt.method}</p>

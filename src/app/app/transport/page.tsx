@@ -105,7 +105,7 @@ export default function TransportPage() {
               />
               {(["name", "vehicleNo", "driver", "driverPhone", "stops"] as const).map((key) => (
                 <div key={key} className="space-y-1">
-                  <Label>{key}</Label>
+                  <Label>{key === "name" ? "Route name" : key === "vehicleNo" ? "Vehicle number" : key === "driver" ? "Driver" : key === "driverPhone" ? "Driver phone" : "Stops"}</Label>
                   <Input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
                 </div>
               ))}

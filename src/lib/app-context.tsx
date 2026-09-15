@@ -27,6 +27,7 @@ import {
   uploadPhoto,
   writeRow,
   type SyncStatus,
+  type WriteResult,
 } from "@/lib/store";
 import { can, type ModuleKey } from "@/lib/rbac";
 import {
@@ -55,15 +56,30 @@ type AppContextValue = {
   logout: () => void;
   allowed: (module: ModuleKey, action?: "read" | "write") => boolean;
   scopedStudentId: () => string | undefined;
-  save: <K extends CollectionKey>(key: K, row: AppState[K][number], details: string) => Promise<void>;
+  save: <K extends CollectionKey>(key: K, row: AppState[K][number], details: string) => Promise<WriteResult>;
   remove: (key: CollectionKey, id: string, details: string) => Promise<void>;
   archive: <K extends CollectionKey>(key: K, row: AppState[K][number] & { deletedAt?: string }, details: string) => Promise<void>;
   upload: (folder: string, id: string, file: File) => Promise<string>;
   createPortalLogin: (input: { email: string; password: string; name: string; role: Role; phone: string; studentId?: string; staffId?: string; childStudentId?: string }) => Promise<string | null>;
+  createStudent: (input: {
+    student: AppState["students"][number];
+    createLogin: boolean;
+    password?: string;
+    createParentLogin: boolean;
+    parentPassword?: string;
+  }) => Promise<string | null>;
   authHeader: () => Promise<HeadersInit>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+function scopeOf(profile: User | null) {
+  if (!profile) return undefined;
+  return {
+    role: profile.role,
+    studentId: profile.role === "student" ? profile.studentId : profile.role === "parent" ? profile.childStudentId : undefined,
+  };
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(EMPTY_STATE);
@@ -90,9 +106,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     function attachLive(profile: User | null) {
       unsubLive();
-      const scope = profile
-        ? { role: profile.role, studentId: profile.role === "student" ? profile.studentId : profile.childStudentId }
-        : undefined;
+      const scope = scopeOf(profile);
       unsubLive = listenAll(
         (key, rows) => {
           if (!alive) return;
@@ -120,15 +134,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSyncStatus("syncing");
       const profile = await loadUserProfile(fbUser.uid, fbUser.email ?? "");
       if (!profile || !profile.active) return null;
-      const cloud = await hydrateFromCloud();
+      if (profile.role === "student" && !profile.studentId) return null;
+      if (profile.role === "parent" && !profile.childStudentId) return null;
+      const cloud = await hydrateFromCloud(scopeOf(profile));
       const local = await loadState();
       if (!alive) return profile;
       let nextState = local;
       if (cloud.ok && cloud.data) {
-        nextState = mergeCloud(local, cloud.data, true);
+        const base = profile.role === "student" || profile.role === "parent" ? EMPTY_STATE : local;
+        nextState = mergeCloud(base, cloud.data, true);
       } else {
         setSyncStatus(cloud.error ? "error" : "offline");
         setSyncError(cloud.error ?? null);
+        if (profile.role === "student" || profile.role === "parent") {
+          nextState = { ...EMPTY_STATE, users: [profile] };
+        }
       }
       if (!nextState.users.some((u) => u.id === profile.id)) {
         nextState = { ...nextState, users: [profile, ...nextState.users] };
@@ -209,7 +229,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const save = useCallback(
-    async <K extends CollectionKey>(key: K, row: AppState[K][number], details: string) => {
+    async <K extends CollectionKey>(key: K, row: AppState[K][number], details: string): Promise<WriteResult> => {
       const item = row as AppState[K][number] & { id: string };
       setState((prev) => {
         const list = prev[key] as { id: string }[];
@@ -224,12 +244,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSyncStatus(result.queued ? "syncing" : "error");
         setSyncError(result.error ?? "Save did not reach the cloud.");
         toast.error(result.error ?? "Save did not reach the cloud.");
-      } else {
-        setSyncStatus("synced");
-        setLastSyncedAt(new Date().toISOString());
-        setSyncError(null);
+        return result;
       }
+      setSyncStatus("synced");
+      setLastSyncedAt(new Date().toISOString());
+      setSyncError(null);
       await audit("save", key, item.id, details);
+      return result;
     },
     [audit],
   );
@@ -270,15 +291,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await firebaseSignOut();
         return "This login has no college profile. Ask the office to create your access.";
       }
-      const cloud = await hydrateFromCloud();
+      if (profile.role === "student" && !profile.studentId) {
+        await firebaseSignOut();
+        return "This login is not linked to a student record.";
+      }
+      if (profile.role === "parent" && !profile.childStudentId) {
+        await firebaseSignOut();
+        return "This login is not linked to a student record.";
+      }
+      const cloud = await hydrateFromCloud(scopeOf(profile));
       const local = await loadState();
       if (cloud.ok && cloud.data) {
-        let merged = mergeCloud(local, cloud.data, true);
+        const base = profile.role === "student" || profile.role === "parent" ? EMPTY_STATE : local;
+        let merged = mergeCloud(base, cloud.data, true);
         if (!merged.users.some((u) => u.id === profile.id)) {
           merged = { ...merged, users: [profile, ...merged.users] };
         }
         setState(merged);
         void persistLocal(merged);
+      } else if (profile.role === "student" || profile.role === "parent") {
+        setState({ ...EMPTY_STATE, users: [profile] });
+        void persistLocal({ ...EMPTY_STATE, users: [profile] });
       } else {
         setState((prev) =>
           prev.users.some((u) => u.id === profile.id) ? prev : { ...prev, users: [profile, ...prev.users] },
@@ -374,10 +407,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
         staffId: input.staffId,
         childStudentId: input.childStudentId,
       };
-      await save("users", profile, `Created ${input.role} portal for ${profile.email}.`);
+      const saved = await save("users", profile, `Created ${input.role} portal for ${profile.email}.`);
+      if (!saved.ok) return saved.error ?? "Firebase login was created but the college profile was not saved. Try again.";
       return null;
     },
     [save, user],
+  );
+
+  const createStudent = useCallback(
+    async (input: {
+      student: AppState["students"][number];
+      createLogin: boolean;
+      password?: string;
+      createParentLogin: boolean;
+      parentPassword?: string;
+    }) => {
+      if (!user || (user.role !== "admin" && user.role !== "staff")) return "Only office staff can admit students.";
+      const token = await currentIdToken();
+      if (token) {
+        const res = await fetch("/api/students", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student: input.student,
+            createLogin: input.createLogin,
+            password: input.createLogin ? input.password : undefined,
+            createParentLogin: input.createParentLogin,
+            parentPassword: input.createParentLogin ? input.parentPassword : undefined,
+          }),
+        });
+        const data = (await res.json()) as { ok?: boolean; note?: string; student?: AppState["students"][number] };
+        if (!data.ok || !data.student) return data.note ?? "Student was not created.";
+        setState((prev) => {
+          const exists = prev.students.some((s) => s.id === data.student!.id);
+          const students = exists
+            ? prev.students.map((s) => (s.id === data.student!.id ? data.student! : s))
+            : [data.student!, ...prev.students];
+          const next = { ...prev, students };
+          void persistLocal(next);
+          return next;
+        });
+        await audit("save", "students", data.student.id, `Saved student ${data.student.name} (${data.student.rollNo}).`);
+        return null;
+      }
+      if (input.createLogin || input.createParentLogin) {
+        return "Sign in to the college cloud to create a student or parent login.";
+      }
+      const saved = await save("students", input.student, `Saved student ${input.student.name} (${input.student.rollNo}).`);
+      if (!saved.ok) return saved.error ?? "Student was not saved.";
+      return null;
+    },
+    [audit, save, user],
   );
 
   const allowed = useCallback(
@@ -423,6 +503,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       archive,
       upload,
       createPortalLogin,
+      createStudent,
       authHeader,
     }),
     [
@@ -445,6 +526,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       archive,
       upload,
       createPortalLogin,
+      createStudent,
       authHeader,
     ],
   );

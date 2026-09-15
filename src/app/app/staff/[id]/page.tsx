@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CourseLabel, DepartmentLabel } from "@/components/ref-label";
 import { useApp } from "@/lib/app-context";
 
 export default function StaffFilePage() {
@@ -13,7 +14,6 @@ export default function StaffFilePage() {
   const { state } = useApp();
   const t = state.staff.find((s) => s.id === id);
   if (!t) return <p>Staff not found.</p>;
-  const dept = state.departments.find((d) => d.id === t.departmentId);
   return (
     <Guard module="staff">
       <PageHeader
@@ -39,7 +39,9 @@ export default function StaffFilePage() {
             <CardHeader>
               <CardTitle className="text-sm">Department</CardTitle>
             </CardHeader>
-            <CardContent>{dept?.name}</CardContent>
+            <CardContent>
+              <DepartmentLabel id={t.departmentId} />
+            </CardContent>
           </Card>
           <Card>
             <CardHeader>
@@ -62,7 +64,14 @@ export default function StaffFilePage() {
               <CardTitle className="text-sm">Subjects</CardTitle>
             </CardHeader>
             <CardContent>
-              {t.courseIds.map((cid) => state.courses.find((c) => c.id === cid)?.name).join(", ") || "—"}
+              {t.courseIds.length
+                ? t.courseIds.map((cid, i) => (
+                    <span key={cid}>
+                      {i ? ", " : ""}
+                      <CourseLabel id={cid} />
+                    </span>
+                  ))
+                : "—"}
             </CardContent>
           </Card>
         </div>

@@ -17,6 +17,7 @@ const SESSION_KEY = "gp-session-user-id";
 
 export type SyncStatus = "synced" | "syncing" | "offline" | "error";
 export type WriteResult = { ok: boolean; error?: string; queued?: boolean };
+export type Scope = { role: Role; studentId?: string };
 
 type OutboxItem = { op: "set" | "archive"; key: CollectionKey; id: string; row?: unknown };
 
@@ -85,7 +86,7 @@ function migrate(state: Partial<AppState>): AppState {
       ...c,
       kind: c.kind ?? (c.years > 1 ? "programme" : "subject"),
     })),
-    sections: (state.sections ?? []).map((s) => ({ ...s, capacity: s.capacity ?? 40 })),
+    sections: (state.sections ?? []).map((s) => ({ ...s, capacity: s.capacity ?? 40, batch: s.batch ?? "" })),
     staff: (state.staff ?? []).map((t) => ({
       ...t,
       qualification: t.qualification ?? "",
@@ -96,6 +97,7 @@ function migrate(state: Partial<AppState>): AppState {
       dob: s.dob ?? "",
       bloodGroup: s.bloodGroup ?? "",
       admissionDate: s.admissionDate ?? "",
+      batch: s.batch ?? "",
     })),
     exams: (state.exams ?? []).map((e) => ({ ...e, sectionId: e.sectionId ?? "", locked: e.locked ?? false })),
     attendance: (state.attendance ?? []).map((a) => ({ ...a, sectionId: a.sectionId ?? "" })),
@@ -114,22 +116,35 @@ async function writeOutbox(items: OutboxItem[]) {
   await (await db()).put(STORE, items, OUTBOX_KEY);
 }
 
-export async function hydrateFromCloud(): Promise<{ ok: boolean; data: Partial<AppState> | null; error?: string }> {
+export async function hydrateFromCloud(scope?: Scope): Promise<{ ok: boolean; data: Partial<AppState> | null; error?: string }> {
   const fb = getFirebase();
   if (!fb?.auth.currentUser) return { ok: false, data: null, error: "Not signed in to cloud." };
-  try {
-    const patch: Partial<AppState> = {};
-    for (const key of COLLECTION_KEYS) {
-      const snap = await getDocs(collection(fb.db, key));
+  const patch: Partial<AppState> = {};
+  const denied: string[] = [];
+  for (const key of COLLECTION_KEYS) {
+    try {
+      const scoped = scopedQuery(key, scope);
+      if (scoped === "skip") continue;
+      if (scoped === "doc" && scope?.studentId && key === "students") {
+        const snap = await getDoc(doc(fb.db, "students", scope.studentId));
+        const rows = snap.exists() ? [stripSecrets({ id: snap.id, ...snap.data() })] : [];
+        (patch as Record<string, unknown>)[key] = rows.filter((row) => !isSampleRecord(row as { id: string; email?: string }));
+        continue;
+      }
+      const ref = typeof scoped === "object" ? scoped : collection(fb.db, key);
+      const snap = await getDocs(ref);
       const rows = snap.docs
         .map((d) => stripSecrets({ id: d.id, ...d.data() }))
         .filter((row) => !isSampleRecord(row as { id: string; email?: string }));
       (patch as Record<string, unknown>)[key] = rows;
+    } catch (err) {
+      denied.push(key);
+      if (scope?.role === "admin" || scope?.role === "staff" || !scope) {
+        return { ok: false, data: null, error: err instanceof Error ? err.message : "Cloud read failed." };
+      }
     }
-    return { ok: true, data: patch };
-  } catch (err) {
-    return { ok: false, data: null, error: err instanceof Error ? err.message : "Cloud read failed." };
   }
+  return { ok: true, data: patch, error: denied.length ? `Skipped ${denied.join(", ")}.` : undefined };
 }
 
 export { mergeCloud };
@@ -180,8 +195,6 @@ export async function archiveRow<K extends CollectionKey>(key: K, row: AppState[
   return writeRow(key, { ...row, deletedAt: new Date().toISOString() } as AppState[K][number]);
 }
 
-export type Scope = { role: Role; studentId?: string };
-
 export function listenAll(
   onChange: (key: CollectionKey, rows: AppState[CollectionKey]) => void,
   onError: (message: string) => void,
@@ -223,7 +236,7 @@ export function listenAll(
   return () => unsubs.forEach((u) => u());
 }
 
-function scopedQuery(key: CollectionKey, scope?: Scope) {
+export function scopedQuery(key: CollectionKey, scope?: Scope) {
   const fb = getFirebase();
   if (!fb || !scope || scope.role === "admin" || scope.role === "staff") return "all";
   const sid = scope.studentId;
