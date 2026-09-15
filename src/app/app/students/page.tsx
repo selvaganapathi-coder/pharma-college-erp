@@ -21,6 +21,7 @@ import { studentSearchText } from "@/lib/references";
 import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
 import { firstError, validateStudent } from "@/lib/validation";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { Student } from "@/lib/types";
 
@@ -121,11 +122,11 @@ export default function StudentsPage() {
   return (
     <Guard module="students">
       <PageHeader
-        title="Student records"
-        note="Admit students with department, course, batch, and section. Optional Firebase login is created only when you tick Create student login — the password is never stored on the student record."
+        title="Students"
+        note="Manage student records, admissions and academic information."
         action={
           canWrite ? (
-            <Button className="min-h-11" onClick={openNew}>Add student</Button>
+            <Button className="min-h-11 rounded-xl px-5" onClick={openNew}>+ Add Student</Button>
           ) : null
         }
       />
@@ -136,17 +137,19 @@ export default function StudentsPage() {
         <StatCard title="Left / inactive" value={`${rows.filter((s) => s.status === "left").length}`} />
       </div>
       {sid ? null : (
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
+        <div className="mb-4 rounded-2xl bg-card p-4 ring-1 ring-border/80 erp-shadow">
+        <div className="grid gap-3 md:grid-cols-4">
           <FilterSelect label="Department" value={deptFilter} options={deptOptions} onChange={(id) => { setDeptFilter(id); setCourseFilter(""); setBatchFilter(""); setSectionFilter(""); }} />
           <FilterSelect label="Course" value={courseFilter} options={courseOptions} onChange={(id) => { setCourseFilter(id); setBatchFilter(""); setSectionFilter(""); }} />
           <FilterSelect label="Batch" value={batchFilter} options={batchOptions} onChange={(id) => { setBatchFilter(id); setSectionFilter(""); }} />
           <FilterSelect label="Section" value={sectionFilter} options={sectionOptions} onChange={setSectionFilter} />
         </div>
+        </div>
       )}
       <DataTable
         rows={rows}
         empty="There are no students matching the selected filters."
-        emptyTitle="No students found"
+        searchPlaceholder="Search students…"
         mobileTitle={(r) => r.name}
         canWrite={canWrite}
         filter={(row, q) => !q || studentSearchText(state, row).includes(q)}
@@ -182,7 +185,7 @@ export default function StudentsPage() {
           { key: "batch", header: "Batch", cell: (r) => r.batch || batchLabel(state.sections.find((s) => s.id === r.sectionId) ?? { batch: "", year: r.year }) },
           { key: "sec", header: "Section", cell: (r) => <SectionLabel id={r.sectionId} /> },
           { key: "parent", header: "Parent", cell: (r) => r.parentName || r.parentPhone },
-          { key: "status", header: "Status", cell: (r) => r.status },
+          { key: "status", header: "Status", cell: (r) => <Badge variant={r.status === "active" ? "success" : "outline"}>{r.status === "active" ? "Active" : "Left"}</Badge> },
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>

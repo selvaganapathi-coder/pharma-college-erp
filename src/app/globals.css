@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-jakarta), var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-jakarta);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,38 +49,38 @@
 }
 
 :root {
-  --background: #f6f1e6;
-  --foreground: #1f1a17;
+  --background: #f4ecda;
+  --foreground: #2a1d18;
   --card: #fffdf8;
-  --card-foreground: #1f1a17;
+  --card-foreground: #2a1d18;
   --popover: #fffdf8;
-  --popover-foreground: #1f1a17;
-  --primary: #b42318;
-  --primary-foreground: #fff8e7;
-  --secondary: #e2b100;
+  --popover-foreground: #2a1d18;
+  --primary: #9b1c1c;
+  --primary-foreground: #fff8e8;
+  --secondary: #e4b422;
   --secondary-foreground: #3b2a00;
-  --muted: #f3e6c4;
-  --muted-foreground: #5c5348;
+  --muted: #f3e6c8;
+  --muted-foreground: #6b5e52;
   --accent: #f6d56b;
   --accent-foreground: #3b2a00;
   --destructive: #9f1239;
-  --border: #ead9a8;
-  --input: #ead9a8;
-  --ring: #b42318;
-  --chart-1: #b42318;
-  --chart-2: #e2b100;
+  --border: #ead7a6;
+  --input: #ead7a6;
+  --ring: #9b1c1c;
+  --chart-1: #9b1c1c;
+  --chart-2: #e4b422;
   --chart-3: #7f1d1d;
   --chart-4: #ca8a04;
   --chart-5: #44403c;
-  --radius: 0.7rem;
-  --sidebar: #3b0a0a;
-  --sidebar-foreground: #fff8e7;
-  --sidebar-primary: #e2b100;
+  --radius: 0.9rem;
+  --sidebar: #7a1520;
+  --sidebar-foreground: #fff8e8;
+  --sidebar-primary: #e4b422;
   --sidebar-primary-foreground: #3b0a0a;
-  --sidebar-accent: #5a1212;
-  --sidebar-accent-foreground: #fff8e7;
-  --sidebar-border: #5a1212;
-  --sidebar-ring: #e2b100;
+  --sidebar-accent: #931c28;
+  --sidebar-accent-foreground: #fff8e8;
+  --sidebar-border: #a42834;
+  --sidebar-ring: #e4b422;
 }
 
 @layer base {
@@ -92,5 +92,14 @@
   }
   html {
     @apply font-sans;
+  }
+  h1, h2, h3, .font-heading {
+    letter-spacing: -0.03em;
+  }
+}
+
+@layer utilities {
+  .erp-shadow {
+    box-shadow: 0 10px 30px -18px rgb(123 21 32 / 0.35);
   }
 }

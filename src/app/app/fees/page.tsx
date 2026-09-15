@@ -118,8 +118,8 @@ export default function FeesPage() {
   return (
     <Guard module="fees">
       <PageHeader
-        title="Fee collection"
-        note="Amounts come from fee records. Razorpay Checkout is required to collect money. The ledger is marked paid only after server-side signature verification."
+        title="Fee Management"
+        note="Track and manage student fee payments."
         action={
           canWrite ? (
             <Button className="min-h-11" onClick={() => {
@@ -139,9 +139,9 @@ export default function FeesPage() {
         }
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Total due" value={`₹${due.toLocaleString("en-IN")}`} />
-        <StatCard title="Collected" value={`₹${collected.toLocaleString("en-IN")}`} note="Paid after verification" />
-        <StatCard title="Overdue bills" value={`${overdue.length}`} />
+        <StatCard title="Total due" value={`₹${due.toLocaleString("en-IN")}`} tone="gold" />
+        <StatCard title="Collected" value={`₹${collected.toLocaleString("en-IN")}`} note="Paid after verification" tone="maroon" />
+        <StatCard title="Overdue bills" value={`${overdue.length}`} tone="red" />
         <StatCard title="Collection rate" value={`${rate}%`} />
       </div>
       {canWrite ? (

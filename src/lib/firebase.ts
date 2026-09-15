@@ -2,6 +2,7 @@ import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
   getAuth,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   type Auth,
@@ -119,6 +120,17 @@ export async function writeSetupLock(adminUid: string) {
     adminUid,
     at: new Date().toISOString(),
   });
+}
+
+export async function firebaseResetPassword(email: string) {
+  const fb = getFirebase();
+  if (!fb) return { ok: false as const, note: "Firebase is not configured on this device." };
+  try {
+    await sendPasswordResetEmail(fb.auth, email);
+    return { ok: true as const, note: "If that email has a login, a reset message is on its way." };
+  } catch (err) {
+    return { ok: false as const, note: firebaseMessage(err) };
+  }
 }
 
 export async function firebaseSignOut() {

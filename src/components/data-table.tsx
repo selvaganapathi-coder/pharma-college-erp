@@ -19,6 +19,9 @@ export function DataTable<T extends { id: string }>({
   onOpen,
   canWrite,
   mobileTitle,
+  searchPlaceholder = "Search records…",
+  hideSearch,
+  toolbar,
 }: {
   rows: T[];
   columns: { key: string; header: string; cell: (row: T) => ReactNode; hideOnMobile?: boolean }[];
@@ -30,6 +33,9 @@ export function DataTable<T extends { id: string }>({
   onOpen?: (row: T) => void;
   canWrite?: boolean;
   mobileTitle?: (row: T) => string;
+  searchPlaceholder?: string;
+  hideSearch?: boolean;
+  toolbar?: ReactNode;
 }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
@@ -39,21 +45,24 @@ export function DataTable<T extends { id: string }>({
 
   return (
     <div className="space-y-3">
-      <Input
-        value={q}
-        onChange={(e) => {
-          setQ(e.target.value);
-          setPage(0);
-        }}
-        placeholder="Search records…"
-        className="max-w-sm min-h-11 bg-card"
-        aria-label="Search records"
-      />
+      {hideSearch ? null : (
+        <Input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(0);
+          }}
+          placeholder={searchPlaceholder}
+          className="max-w-sm min-h-11 rounded-full bg-card"
+          aria-label="Search records"
+        />
+      )}
+      {toolbar}
       {shown.length === 0 ? (
         <EmptyState title={emptyTitle ?? "No records"} description={empty} />
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm md:block">
+          <div className="hidden overflow-x-auto rounded-2xl border-0 bg-card ring-1 ring-border/80 erp-shadow md:block">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/70">

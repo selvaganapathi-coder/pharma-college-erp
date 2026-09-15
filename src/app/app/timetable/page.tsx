@@ -39,11 +39,11 @@ export default function TimetablePage() {
       <div className="mb-4 max-w-xs">
         <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />
       </div>
-      <div className="overflow-x-auto rounded-xl border border-border">
+      <div className="overflow-x-auto rounded-2xl bg-card p-3 ring-1 ring-border/80 erp-shadow">
         <table className="w-full min-w-[860px] text-sm text-primary">
-          <thead className="bg-secondary">
+          <thead>
             <tr>
-              <th className="p-3 text-left">Time</th>
+              <th className="p-3 text-left text-muted-foreground">Time</th>
               {DAYS.map((d) => (
                 <th key={d} className="p-3 text-left">
                   {d}
@@ -64,7 +64,13 @@ export default function TimetablePage() {
                       <button
                         type="button"
                         disabled={!canWrite}
-                        className="w-full rounded-lg border border-border bg-accent p-2 text-left"
+                        className={`w-full rounded-xl p-2.5 text-left shadow-sm ${
+                          slot
+                            ? ["bg-rose-100 text-rose-950", "bg-amber-100 text-amber-950", "bg-emerald-100 text-emerald-950", "bg-sky-100 text-sky-950", "bg-violet-100 text-violet-950"][
+                                Math.abs(slot.courseId.split("").reduce((n, ch) => n + ch.charCodeAt(0), 0)) % 5
+                              ]
+                            : "border border-dashed border-border bg-card text-muted-foreground"
+                        }`}
                         onClick={() => setEdit({ day: d, period: p, slot })}
                       >
                         {slot ? (

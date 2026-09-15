@@ -35,38 +35,60 @@ export default function StudentFilePage() {
   return (
     <Guard module="students">
       <PageHeader
-        title={st.name}
-        note={`${st.rollNo} · ${st.status}`}
+        title="Student Profile"
+        note={`${st.rollNo} · GP Pharmacy College`}
         action={
-          <Button variant="outline" className="min-h-11" onClick={() => router.push("/app/students")}>
+          <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => router.push("/app/students")}>
             Back
           </Button>
         }
       />
-      <div className="mb-6 grid gap-4 md:grid-cols-[200px_1fr]">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="mx-auto size-40 overflow-hidden rounded-xl border border-border bg-accent">
-              {st.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={st.photoUrl} alt={st.name} className="size-full object-cover" />
-              ) : (
-                <p className="flex size-full items-center justify-center text-sm">No photo</p>
-              )}
+      <Card className="mb-6 border-0 erp-shadow ring-1 ring-border/80">
+        <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center">
+          <div className="size-24 overflow-hidden rounded-full border-4 border-secondary bg-muted">
+            {st.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={st.photoUrl} alt={st.name} className="size-full object-cover" />
+            ) : (
+              <p className="flex size-full items-center justify-center text-2xl font-semibold text-primary">{st.name.slice(0, 1)}</p>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-2xl font-semibold text-primary">{st.name}</h2>
+              <Badge variant={st.status === "active" ? "success" : "outline"}>{st.status === "active" ? "Active" : "Left"}</Badge>
             </div>
-          </CardContent>
-        </Card>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Info title="Department">
-            <DepartmentLabel id={st.departmentId} />
-          </Info>
-          <Info title="Status" value={st.status} />
-          <Info title="Attendance" value={att.length ? `${pct}%` : "No marks yet"} />
-          <Info title="Fees due" value={`₹${fees.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0).toLocaleString("en-IN")}`} />
-        </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              <CourseLabel id={st.courseId} /> · <SectionLabel id={st.sectionId} />
+            </p>
+            <p className="text-xs text-muted-foreground">Admission No: {st.rollNo}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center text-sm">
+            <div>
+              <p className="text-lg font-semibold text-primary">{att.length ? `${pct}%` : "—"}</p>
+              <p className="text-xs text-muted-foreground">Attendance</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-primary">{marks.length}</p>
+              <p className="text-xs text-muted-foreground">Marks</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-primary">₹{fees.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0).toLocaleString("en-IN")}</p>
+              <p className="text-xs text-muted-foreground">Pending fees</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Info title="Department">
+          <DepartmentLabel id={st.departmentId} />
+        </Info>
+        <Info title="Attendance" value={att.length ? `${pct}%` : "No marks yet"} />
+        <Info title="Fees due" value={`₹${fees.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0).toLocaleString("en-IN")}`} />
+        <Info title="Library" value={`${books.filter((b) => !b.returnedOn).length} books out`} />
       </div>
       <Tabs defaultValue="personal">
-        <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1">
+        <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1 rounded-full bg-muted p-1">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="academic">Academic</TabsTrigger>
           <TabsTrigger value="parent">Parent</TabsTrigger>
