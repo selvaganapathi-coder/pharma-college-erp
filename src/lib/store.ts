@@ -1,26 +1,17 @@
 "use client";
 
 import { openDB, type IDBPDatabase } from "idb";
-import {
-  collection,
-  doc,
-  getDocs,
-  onSnapshot,
-  setDoc,
-  writeBatch,
-  deleteDoc,
-} from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import type { AppState, AuditLog, CollectionKey } from "./types";
 import { COLLECTION_KEYS, EMPTY_STATE } from "./types";
-import { makeSeed } from "./seed";
+import { isSampleId, SAMPLE_EMAILS } from "./seed";
 import { getFirebase } from "./firebase";
 
-const DB_NAME = "gp-pharmacy-erp-v2";
+const DB_NAME = "gp-pharmacy-erp-v3";
 const STORE = "kv";
 const STATE_KEY = "app-state";
 const SESSION_KEY = "gp-session-user-id";
-const SEEDED_KEY = "gp-seeded";
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -43,12 +34,28 @@ export function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
 }
 
+export function stripSample(state: AppState): AppState {
+  const next = { ...EMPTY_STATE } as AppState;
+  for (const key of COLLECTION_KEYS) {
+    const rows = state[key] as { id: string; email?: string }[];
+    (next[key] as unknown[]) = rows.filter((row) => {
+      if (isSampleId(row.id)) return false;
+      if (row.email && SAMPLE_EMAILS.has(row.email.toLowerCase())) return false;
+      return true;
+    });
+  }
+  return next;
+}
+
 export async function loadState(): Promise<AppState> {
   const local = await (await db()).get(STORE, STATE_KEY);
-  if (local) return migrate(local as AppState);
-  const seed = makeSeed();
-  await persistLocal(seed);
-  return seed;
+  if (!local) {
+    await persistLocal(EMPTY_STATE);
+    return EMPTY_STATE;
+  }
+  const cleaned = stripSample(migrate(local as AppState));
+  await persistLocal(cleaned);
+  return cleaned;
 }
 
 function migrate(state: Partial<AppState>): AppState {
@@ -68,7 +75,7 @@ function migrate(state: Partial<AppState>): AppState {
     })),
     students: (state.students ?? []).map((s) => ({
       ...s,
-      dob: s.dob ?? "2006-01-01",
+      dob: s.dob ?? "",
       bloodGroup: s.bloodGroup ?? "",
       admissionDate: s.admissionDate ?? "",
     })),
@@ -79,13 +86,6 @@ function migrate(state: Partial<AppState>): AppState {
 
 export async function persistLocal(state: AppState) {
   await (await db()).put(STORE, clean(state), STATE_KEY);
-}
-
-export async function persistCollection<K extends CollectionKey>(key: K, rows: AppState[K]) {
-  const current = migrate((await (await db()).get(STORE, STATE_KEY)) ?? EMPTY_STATE);
-  const next = { ...current, [key]: rows };
-  await persistLocal(next);
-  return next as AppState;
 }
 
 export async function writeRow<K extends CollectionKey>(key: K, row: AppState[K][number]) {
@@ -111,29 +111,21 @@ export async function removeRow(key: CollectionKey, id: string) {
   }
 }
 
-export async function seedCloudIfEmpty(state: AppState) {
+export async function purgeSampleFromCloud() {
   const fb = getFirebase();
   if (!fb?.auth.currentUser) return;
-  if (sessionStorage.getItem(SEEDED_KEY)) return;
   try {
-    const snap = await getDocs(collection(fb.db, "departments"));
-    if (!snap.empty) {
-      sessionStorage.setItem(SEEDED_KEY, "1");
-      return;
-    }
-    const batch = writeBatch(fb.db);
-    let n = 0;
     for (const key of COLLECTION_KEYS) {
-      for (const row of state[key]) {
-        batch.set(doc(fb.db, key, row.id), clean(row));
-        n += 1;
-        if (n >= 400) break;
+      const snap = await getDocs(collection(fb.db, key));
+      for (const d of snap.docs) {
+        const email = (d.data() as { email?: string }).email;
+        if (isSampleId(d.id) || (email && SAMPLE_EMAILS.has(email.toLowerCase()))) {
+          await deleteDoc(d.ref);
+        }
       }
     }
-    await batch.commit();
-    sessionStorage.setItem(SEEDED_KEY, "1");
   } catch {
-    /* rules or network */
+    /* rules */
   }
 }
 
@@ -142,7 +134,14 @@ export function listenAll(onChange: (key: CollectionKey, rows: AppState[Collecti
   if (!fb) return () => undefined;
   const unsubs = COLLECTION_KEYS.map((key) =>
     onSnapshot(collection(fb.db, key), (snap) => {
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AppState[CollectionKey];
+      const rows = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((row) => {
+          const email = (row as { email?: string }).email;
+          if (isSampleId(row.id)) return false;
+          if (email && SAMPLE_EMAILS.has(email.toLowerCase())) return false;
+          return true;
+        }) as AppState[CollectionKey];
       onChange(key, rows);
     }),
   );

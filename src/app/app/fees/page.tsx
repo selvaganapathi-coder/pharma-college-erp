@@ -78,7 +78,6 @@ export default function FeesPage() {
         action={
           canWrite ? (
             <Button
-              className="bg-[#C41E3A] text-[#FFE566]"
               onClick={() => {
                 setPlan({
                   id: uid("fp"),
@@ -99,7 +98,7 @@ export default function FeesPage() {
       {canWrite ? (
         <div className="mb-4 grid gap-2 md:grid-cols-2">
           {state.feePlans.map((p) => (
-            <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2] p-3">
+            <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3">
               <div>
                 <p className="font-semibold">{p.name}</p>
                 <p className="text-xs">
@@ -107,10 +106,10 @@ export default function FeesPage() {
                 </p>
               </div>
               <div className="flex gap-1">
-                <Button size="sm" className="bg-[#C41E3A] text-[#FFE566]" onClick={() => void generateFromPlan(p)}>
+                <Button size="sm" onClick={() => void generateFromPlan(p)}>
                   Raise bills
                 </Button>
-                <Button size="sm" variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={() => void remove("feePlans", p.id, `Deleted plan ${p.name}.`)}>
+                <Button size="sm" variant="outline" onClick={() => void remove("feePlans", p.id, `Deleted plan ${p.name}.`)}>
                   Delete
                 </Button>
               </div>
@@ -120,7 +119,7 @@ export default function FeesPage() {
       ) : null}
       <DataTable
         rows={rows}
-        empty="No fee bills yet."
+        empty="No fee bills yet. Create a plan and raise bills for a programme year."
         canWrite={canWrite}
         filter={(row, q) => {
           const st = state.students.find((s) => s.id === row.studentId);
@@ -143,7 +142,7 @@ export default function FeesPage() {
             key: "status",
             header: "Status",
             cell: (r) => (
-              <Badge className="bg-[#C41E3A] text-[#FFE566]">
+              <Badge>
                 {r.status}
                 {r.receiptNo ? ` · ${r.receiptNo}` : ""}
               </Badge>
@@ -154,11 +153,11 @@ export default function FeesPage() {
             header: "",
             cell: (r) =>
               r.status !== "paid" ? (
-                <Button size="sm" className="bg-[#C41E3A] text-[#FFE566]" onClick={() => setPayId(r.id)}>
+                <Button size="sm" onClick={() => setPayId(r.id)}>
                   Pay now
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={() => setReceipt(r)}>
+                <Button size="sm" variant="outline" onClick={() => setReceipt(r)}>
                   Receipt
                 </Button>
               ),
@@ -166,9 +165,9 @@ export default function FeesPage() {
         ]}
       />
       <Dialog open={Boolean(payId)} onOpenChange={(o) => !o && setPayId(null)}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Secure checkout</DialogTitle>
+            <DialogTitle>Secure checkout</DialogTitle>
           </DialogHeader>
           {paying ? (
             <div className="space-y-3">
@@ -190,7 +189,7 @@ export default function FeesPage() {
                   <Input defaultValue="123" type="password" />
                 </div>
               </div>
-              <Button className="w-full bg-[#C41E3A] text-[#FFE566]" onClick={() => void confirmPay()}>
+              <Button className="w-full" onClick={() => void confirmPay()}>
                 Pay ₹{paying.amount.toLocaleString("en-IN")}
               </Button>
             </div>
@@ -198,12 +197,12 @@ export default function FeesPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={Boolean(receipt)} onOpenChange={(o) => !o && setReceipt(null)}>
-        <DialogContent className="bg-white">
+        <DialogContent className="bg-card">
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Fee receipt</DialogTitle>
+            <DialogTitle>Fee receipt</DialogTitle>
           </DialogHeader>
           {receipt ? (
-            <div id="receipt" className="space-y-2 text-sm text-[#C41E3A]">
+            <div id="receipt" className="space-y-2 text-sm text-primary">
               <p className="text-lg font-bold">GP Pharmacy College</p>
               <p>Receipt {receipt.receiptNo}</p>
               <p>Student: {state.students.find((s) => s.id === receipt.studentId)?.name}</p>
@@ -211,7 +210,7 @@ export default function FeesPage() {
               <p>Amount: ₹{receipt.amount.toLocaleString("en-IN")}</p>
               <p>Paid on: {receipt.paidAt} · {receipt.method}</p>
               <p>Txn: {receipt.txnId}</p>
-              <Button className="mt-2 bg-[#C41E3A] text-[#FFE566]" onClick={() => window.print()}>
+              <Button className="mt-2" onClick={() => window.print()}>
                 Print
               </Button>
             </div>
@@ -219,9 +218,9 @@ export default function FeesPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={planOpen} onOpenChange={setPlanOpen}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Fee plan</DialogTitle>
+            <DialogTitle>Fee plan</DialogTitle>
           </DialogHeader>
           {plan ? (
             <div className="space-y-3">
@@ -250,7 +249,6 @@ export default function FeesPage() {
                 </div>
               </div>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
                 disabled={!plan.name}
                 onClick={async () => {
                   await save("feePlans", plan, `Saved fee plan ${plan.name}.`);

@@ -52,7 +52,7 @@ export default function AlertsPage() {
       studentId: studentId || undefined,
       urgent,
       createdAt: new Date().toISOString(),
-      createdBy: user?.id ?? "u1",
+      createdBy: user?.id ?? "",
       status: data.ok ? "sent" : "queued",
       deliveryNote: data.note,
     };
@@ -69,7 +69,7 @@ export default function AlertsPage() {
         note="Send WhatsApp, SMS, email, and in-app in one go. Pick all, a section, or one student. MSG91 and SMTP send live when keys are set; otherwise the alert is stored and queued."
       />
       {canWrite ? (
-        <div className="mb-6 space-y-3 rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2] p-4">
+        <div className="mb-6 space-y-3 rounded-xl border border-border p-4">
           <div className="space-y-1">
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -131,17 +131,17 @@ export default function AlertsPage() {
               Urgent
             </label>
           </div>
-          <Button className="bg-[#C41E3A] text-[#FFE566]" disabled={!title || !body} onClick={() => void send()}>
+          <Button disabled={!title || !body} onClick={() => void send()}>
             Send alert
           </Button>
         </div>
       ) : null}
       <div className="space-y-3">
         {state.notices.map((n) => (
-          <article key={n.id} className="rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2] p-4">
+          <article key={n.id} className="rounded-xl border border-border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold">{n.title}</h2>
-              {n.urgent ? <Badge className="bg-[#C41E3A] text-[#FFE566]">Urgent</Badge> : null}
+              {n.urgent ? <Badge>Urgent</Badge> : null}
               <Badge variant="outline">{n.status}</Badge>
               {canWrite ? (
                 <Button size="sm" variant="ghost" onClick={() => void remove("notices", n.id, `Deleted alert ${n.title}.`)}>

@@ -42,7 +42,6 @@ export default function ExamsPage() {
         action={
           canWrite ? (
             <Button
-              className="bg-[#C41E3A] text-[#FFE566]"
               onClick={() => {
                 setForm({
                   id: uid("e"),
@@ -66,7 +65,6 @@ export default function ExamsPage() {
           <Button
             key={e.id}
             size="sm"
-            className={e.id === (exam?.id ?? examId) ? "bg-[#C41E3A] text-[#FFE566]" : ""}
             variant={e.id === (exam?.id ?? examId) ? "default" : "outline"}
             onClick={() => setExamId(e.id)}
           >
@@ -82,14 +80,14 @@ export default function ExamsPage() {
             <Button
               size="sm"
               variant="outline"
-              className="ml-2 border-[#C41E3A] text-[#C41E3A]"
+              className="ml-2"
               onClick={() => void save("exams", { ...exam, locked: !exam.locked }, exam.locked ? "Unlocked exam." : "Locked exam.")}
             >
               {exam.locked ? "Unlock" : "Lock paper"}
             </Button>
           ) : null}
           {canWrite ? (
-            <Button size="sm" variant="ghost" className="text-[#C41E3A]" onClick={() => void remove("exams", exam.id, `Deleted exam ${exam.name}.`)}>
+            <Button size="sm" variant="ghost" onClick={() => void remove("exams", exam.id, `Deleted exam ${exam.name}.`)}>
               Delete exam
             </Button>
           ) : null}
@@ -97,7 +95,7 @@ export default function ExamsPage() {
       ) : null}
       <DataTable
         rows={rows}
-        empty="No students for this paper."
+        empty="No students for this paper. Admit students into the section first."
         filter={(row, q) => !q || `${row.name} ${row.rollNo}`.toLowerCase().includes(q)}
         columns={[
           { key: "roll", header: "Roll no.", cell: (r) => r.rollNo },
@@ -108,7 +106,7 @@ export default function ExamsPage() {
             cell: (r) =>
               canWrite && exam && !exam.locked ? (
                 <Input
-                  className="w-24 bg-white"
+                  className="w-24"
                   type="number"
                   defaultValue={r.score}
                   onBlur={(e) => {
@@ -129,9 +127,9 @@ export default function ExamsPage() {
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">New exam</DialogTitle>
+            <DialogTitle>New exam</DialogTitle>
           </DialogHeader>
           {form ? (
             <div className="space-y-3">
@@ -161,7 +159,6 @@ export default function ExamsPage() {
                 </div>
               </div>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
                 disabled={!form.name}
                 onClick={async () => {
                   await save("exams", form, `Created exam ${form.name}.`);

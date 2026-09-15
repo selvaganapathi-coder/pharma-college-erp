@@ -46,7 +46,7 @@ export default function ReportsPage() {
         title="Reports"
         note="Live charts from attendance, fees, and exams. Download a CSV for the office."
         action={
-          <Button className="bg-[#C41E3A] text-[#FFE566]" onClick={csv}>
+          <Button onClick={csv}>
             Download CSV
           </Button>
         }
@@ -61,7 +61,7 @@ export default function ReportsPage() {
               <PieChart>
                 <Pie data={att} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} label>
                   {att.map((_, i) => (
-                    <Cell key={i} fill={["#C41E3A", "#EAB308", "#7F1D1D"][i]} />
+                    <Cell key={i} fill={["#b42318", "#e2b100", "#7f1d1d"][i]} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -80,7 +80,7 @@ export default function ReportsPage() {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="value" fill="#C41E3A" radius={6} />
+                <Bar dataKey="value" fill="#b42318" radius={6} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -96,7 +96,7 @@ export default function ReportsPage() {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="pct" fill="#C41E3A" radius={6} />
+                <Bar dataKey="pct" fill="#b42318" radius={6} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -112,7 +112,7 @@ export default function ReportsPage() {
                 <XAxis dataKey="name" hide />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="avg" fill="#C41E3A" radius={6} />
+                <Bar dataKey="avg" fill="#b42318" radius={6} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

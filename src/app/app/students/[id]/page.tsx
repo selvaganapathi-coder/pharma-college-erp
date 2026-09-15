@@ -14,9 +14,9 @@ export default function StudentFilePage() {
   const sid = scopedStudentId();
   const st = state.students.find((s) => s.id === id);
   if (sid && sid !== id) {
-    return <p className="text-[#C41E3A]">You can only open your own student file.</p>;
+    return <p>You can only open your own student file.</p>;
   }
-  if (!st) return <p className="text-[#C41E3A]">Student not found.</p>;
+  if (!st) return <p>Student not found.</p>;
   const course = state.courses.find((c) => c.id === st.courseId);
   const section = state.sections.find((s) => s.id === st.sectionId);
   const dept = state.departments.find((d) => d.id === st.departmentId);
@@ -30,7 +30,7 @@ export default function StudentFilePage() {
         title={st.name}
         note={`${st.rollNo} · ${course?.name ?? ""} · ${section?.name ?? ""}`}
         action={
-          <Button variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={() => router.push("/app/students")}>
+          <Button variant="outline" onClick={() => router.push("/app/students")}>
             Back
           </Button>
         }
@@ -38,7 +38,7 @@ export default function StudentFilePage() {
       <div className="grid gap-4 md:grid-cols-[200px_1fr]">
         <Card>
           <CardContent className="pt-6">
-            <div className="mx-auto size-40 overflow-hidden rounded-xl border-2 border-[#C41E3A] bg-[#FFE566]">
+            <div className="mx-auto size-40 overflow-hidden rounded-xl border border-border bg-accent">
               {st.photoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={st.photoUrl} alt={st.name} className="size-full object-cover" />
@@ -69,9 +69,9 @@ function Info({ title, value }: { title: string; value?: string }) {
   return (
     <Card>
       <CardHeader className="pb-1">
-        <CardTitle className="text-sm text-[#C41E3A]">{title}</CardTitle>
+        <CardTitle className="text-sm text-primary">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="text-[#9B1B30]">{value || "—"}</CardContent>
+      <CardContent className="text-foreground">{value || "—"}</CardContent>
     </Card>
   );
 }

@@ -29,23 +29,23 @@ export function DataTable<T extends { id: string }>({
 
   return (
     <div className="space-y-3">
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type to search…" className="max-w-sm bg-white text-[#C41E3A]" />
-      <div className="overflow-x-auto rounded-xl border-2 border-[#C41E3A] bg-white">
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search records…" className="max-w-sm bg-card" />
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#FFE566]">
+            <TableRow className="bg-muted/70">
               {columns.map((c) => (
-                <TableHead key={c.key} className="font-semibold text-[#C41E3A]">
+                <TableHead key={c.key} className="font-semibold text-primary">
                   {c.header}
                 </TableHead>
               ))}
-              {onOpen || canWrite ? <TableHead className="text-[#C41E3A]">Actions</TableHead> : null}
+              {onOpen || canWrite ? <TableHead className="text-primary">Actions</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {shown.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length + 1} className="py-10 text-center text-[#C41E3A]">
+                <TableCell colSpan={columns.length + 1} className="py-12 text-center text-muted-foreground">
                   {empty}
                 </TableCell>
               </TableRow>
@@ -53,28 +53,25 @@ export function DataTable<T extends { id: string }>({
               shown.map((row) => (
                 <TableRow key={row.id}>
                   {columns.map((c) => (
-                    <TableCell key={c.key} className="text-[#9B1B30]">
-                      {c.cell(row)}
-                    </TableCell>
+                    <TableCell key={c.key}>{c.cell(row)}</TableCell>
                   ))}
                   {onOpen || canWrite ? (
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {onOpen ? (
-                          <Button size="sm" variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={() => onOpen(row)}>
+                          <Button size="sm" variant="outline" onClick={() => onOpen(row)}>
                             View
                           </Button>
                         ) : null}
                         {canWrite && onEdit ? (
-                          <Button size="sm" className="bg-[#C41E3A] text-yellow-300" onClick={() => onEdit(row)}>
+                          <Button size="sm" onClick={() => onEdit(row)}>
                             Edit
                           </Button>
                         ) : null}
                         {canWrite && onDelete ? (
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="border-[#C41E3A] text-[#C41E3A]"
+                            variant="ghost"
                             onClick={() => {
                               if (confirm("Delete this record?")) onDelete(row);
                             }}
@@ -91,7 +88,7 @@ export function DataTable<T extends { id: string }>({
           </TableBody>
         </Table>
       </div>
-      <p className="text-xs text-[#C41E3A]">{shown.length} record(s)</p>
+      <p className="text-xs text-muted-foreground">{shown.length} record(s)</p>
     </div>
   );
 }

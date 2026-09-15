@@ -27,7 +27,7 @@ export default function MessagesPage() {
         note="College announcements. Urgent notes show a red tag. Staff can post, edit by posting again, or delete."
       />
       {canWrite ? (
-        <div className="mb-6 space-y-3 rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2] p-4">
+        <div className="mb-6 space-y-3 rounded-xl border border-border p-4">
           <div className="space-y-1">
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -41,10 +41,9 @@ export default function MessagesPage() {
               <Checkbox checked={urgent} onCheckedChange={(v) => setUrgent(Boolean(v))} />
               Urgent academic alert
             </label>
-            <Input className="max-w-xs bg-white" value={audience} onChange={(e) => setAudience(e.target.value)} />
+            <Input className="max-w-xs bg-card" value={audience} onChange={(e) => setAudience(e.target.value)} />
           </div>
           <Button
-            className="bg-[#C41E3A] text-[#FFE566]"
             disabled={!title || !body}
             onClick={async () => {
               await save(
@@ -54,7 +53,7 @@ export default function MessagesPage() {
                   title,
                   body,
                   urgent,
-                  fromUserId: user?.id ?? "u1",
+                  fromUserId: user?.id ?? "",
                   audience,
                   createdAt: new Date().toISOString(),
                 },
@@ -72,11 +71,11 @@ export default function MessagesPage() {
         {state.messages.map((m) => (
           <article
             key={m.id}
-            className={`rounded-xl border-2 p-4 ${m.urgent ? "border-[#C41E3A] bg-[#FFD6DC]" : "border-[#C41E3A] bg-[#FFF8C2]"}`}
+            className={`rounded-xl border-2 p-4 ${m.urgent ? "border-border bg-destructive/10" : "border-border"}`}
           >
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold">{m.title}</h2>
-              {m.urgent ? <Badge className="bg-[#C41E3A] text-[#FFE566]">Urgent</Badge> : null}
+              {m.urgent ? <Badge>Urgent</Badge> : null}
               <span className="text-xs">{m.audience}</span>
               {canWrite ? (
                 <Button size="sm" variant="ghost" onClick={() => void remove("messages", m.id, `Deleted message ${m.title}.`)}>

@@ -24,14 +24,14 @@ export function SearchTable<T>({
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Type to search…"
-        className="max-w-sm bg-white"
+        className="max-w-sm bg-card"
       />
-      <div className="overflow-x-auto rounded-xl border border-[#F0C94A] bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <Table>
           <TableHeader>
-            <TableRow className="bg-[#FFF3C4]">
+            <TableRow className="bg-muted">
               {columns.map((c) => (
-                <TableHead key={c.key} className="text-[#7A1F1F]">
+                <TableHead key={c.key} className="text-primary">
                   {c.header}
                 </TableHead>
               ))}
@@ -40,7 +40,7 @@ export function SearchTable<T>({
           <TableBody>
             {shown.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="py-10 text-center text-[#6B4A1F]">
+                <TableCell colSpan={columns.length} className="py-10 text-center text-muted-foreground">
                   {empty}
                 </TableCell>
               </TableRow>

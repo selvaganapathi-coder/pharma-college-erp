@@ -20,9 +20,9 @@ export function PhotoUpload({
 
   return (
     <div className="space-y-2">
-      <Label className="text-[#C41E3A]">{label}</Label>
+      <Label>{label}</Label>
       <div className="flex items-center gap-3">
-        <div className="flex size-20 items-center justify-center overflow-hidden rounded-lg border-2 border-[#C41E3A] bg-[#FFF3C4] text-xs text-[#C41E3A]">
+        <div className="flex size-20 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted text-xs text-primary">
           {value ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value} alt="" className="size-full object-cover" />
@@ -51,13 +51,13 @@ export function PhotoUpload({
             }}
           />
           {value ? (
-            <Button type="button" variant="ghost" size="sm" className="mt-1 text-[#C41E3A]" onClick={() => onChange("")}>
+            <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => onChange("")}>
               Remove photo
             </Button>
           ) : null}
         </div>
       </div>
-      <p className="text-xs text-[#C41E3A]">{busy ? "Uploading…" : err ?? "JPG, PNG or WebP. Max 4 MB."}</p>
+      <p className="text-xs text-primary">{busy ? "Uploading…" : err ?? "JPG, PNG or WebP. Max 4 MB."}</p>
     </div>
   );
 }

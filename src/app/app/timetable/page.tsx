@@ -39,9 +39,9 @@ export default function TimetablePage() {
       <div className="mb-4 max-w-xs">
         <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />
       </div>
-      <div className="overflow-x-auto rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2]">
-        <table className="w-full min-w-[860px] text-sm text-[#C41E3A]">
-          <thead className="bg-[#FFD000]">
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full min-w-[860px] text-sm text-primary">
+          <thead className="bg-secondary">
             <tr>
               <th className="p-3 text-left">Time</th>
               {DAYS.map((d) => (
@@ -53,7 +53,7 @@ export default function TimetablePage() {
           </thead>
           <tbody>
             {PERIODS.map((p) => (
-              <tr key={p} className="border-t border-[#C41E3A]">
+              <tr key={p} className="border-t border-border">
                 <td className="p-3 font-semibold">{p}</td>
                 {DAYS.map((d) => {
                   const slot = cell(d, p);
@@ -64,7 +64,7 @@ export default function TimetablePage() {
                       <button
                         type="button"
                         disabled={!canWrite}
-                        className="w-full rounded-lg border border-[#C41E3A] bg-[#FFE566] p-2 text-left"
+                        className="w-full rounded-lg border border-border bg-accent p-2 text-left"
                         onClick={() => setEdit({ day: d, period: p, slot })}
                       >
                         {slot ? (
@@ -86,9 +86,9 @@ export default function TimetablePage() {
         </table>
       </div>
       <Dialog open={Boolean(edit)} onOpenChange={(o) => !o && setEdit(null)}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">
+            <DialogTitle>
               {edit?.day} · {edit?.period}
             </DialogTitle>
           </DialogHeader>
@@ -171,7 +171,6 @@ function SlotForm({
       </div>
       <div className="flex gap-2">
         <Button
-          className="bg-[#C41E3A] text-[#FFE566]"
           disabled={!courseId || !staffId}
           onClick={() =>
             onSave({
@@ -188,7 +187,7 @@ function SlotForm({
           Save slot
         </Button>
         {onDelete ? (
-          <Button variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={onDelete}>
+          <Button variant="outline" onClick={onDelete}>
             Clear
           </Button>
         ) : (

@@ -22,6 +22,7 @@ export default function StaffPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Staff | null>(null);
   const [subjectId, setSubjectId] = useState("");
+  const [portalPassword, setPortalPassword] = useState("");
 
   const rows = useMemo(() => state.staff, [state.staff]);
 
@@ -49,7 +50,7 @@ export default function StaffPage() {
         note="Add teachers and office staff. Pick a department, then the subjects they teach in that department. Upload a staff photo."
         action={
           canWrite ? (
-            <Button className="bg-[#C41E3A] text-[#FFE566]" onClick={startNew}>
+            <Button onClick={startNew}>
               Add staff
             </Button>
           ) : null
@@ -57,7 +58,7 @@ export default function StaffPage() {
       />
       <DataTable
         rows={rows}
-        empty="No staff found."
+        empty="No staff yet. Add the first teacher or office record."
         canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.staffCode} ${row.email} ${row.title}`.toLowerCase().includes(q)}
         onOpen={(r) => router.push(`/app/staff/${r.id}`)}
@@ -94,9 +95,9 @@ export default function StaffPage() {
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto bg-[#FFF8C2]">
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">{form && rows.some((r) => r.id === form.id) ? "Edit staff" : "New staff"}</DialogTitle>
+            <DialogTitle>{form && rows.some((r) => r.id === form.id) ? "Edit staff" : "New staff"}</DialogTitle>
           </DialogHeader>
           {form ? (
             <div className="space-y-3">
@@ -145,6 +146,10 @@ export default function StaffPage() {
                   if (!form.courseIds.includes(id)) setForm({ ...form, courseIds: [...form.courseIds, id] });
                 }}
               />
+              <div className="space-y-1">
+                <Label>Portal password</Label>
+                <Input type="password" value={portalPassword} onChange={(e) => setPortalPassword(e.target.value)} placeholder="Optional login for this staff" />
+              </div>
               <p className="text-xs">
                 Subjects:{" "}
                 {form.courseIds.map((id) => (
@@ -159,10 +164,26 @@ export default function StaffPage() {
                 ))}
               </p>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
                 disabled={!form.name}
                 onClick={async () => {
                   await save("staff", form, `Saved staff ${form.name}.`);
+                  if (portalPassword && form.email) {
+                    await save(
+                      "users",
+                      {
+                        id: uid("u"),
+                        email: form.email.toLowerCase(),
+                        password: portalPassword,
+                        name: form.name,
+                        role: "staff",
+                        phone: form.phone,
+                        staffId: form.id,
+                        active: true,
+                      },
+                      `Created staff login for ${form.email}.`,
+                    );
+                  }
+                  setPortalPassword("");
                   setOpen(false);
                 }}
               >

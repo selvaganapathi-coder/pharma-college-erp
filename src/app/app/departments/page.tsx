@@ -27,7 +27,6 @@ export default function DepartmentsPage() {
         action={
           canWrite ? (
             <Button
-              className="bg-[#C41E3A] text-[#FFE566]"
               onClick={() => {
                 setForm({ id: uid("d"), code: "", name: "", head: "", phone: "" });
                 setOpen(true);
@@ -40,7 +39,7 @@ export default function DepartmentsPage() {
       />
       <DataTable
         rows={state.departments}
-        empty="No department found."
+        empty="No departments yet. Add the first faculty group."
         canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.code} ${row.head}`.toLowerCase().includes(q)}
         onEdit={(r) => {
@@ -78,9 +77,9 @@ export default function DepartmentsPage() {
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Department</DialogTitle>
+            <DialogTitle>Department</DialogTitle>
           </DialogHeader>
           {form ? (
             <div className="space-y-3">
@@ -107,7 +106,6 @@ export default function DepartmentsPage() {
                 <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
                 disabled={!form.name}
                 onClick={async () => {
                   await save("departments", form, `Saved department ${form.name}.`);

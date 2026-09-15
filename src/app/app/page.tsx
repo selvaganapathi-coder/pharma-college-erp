@@ -25,15 +25,15 @@ export default function DashboardPage() {
     return (
       <div>
         <PageHeader
-          title={`Hello ${user.name}`}
+          title={`Welcome, ${user.name}`}
           note={
             user.role === "parent"
-              ? `You see ${myStudent?.name ?? "your child"}: class, fees, and alerts.`
-              : "Your class, fees, books, and alerts are here."
+              ? `Linked student: ${myStudent?.name ?? "not linked yet"}.`
+              : "Your attendance, fees, and notices."
           }
         />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Stat title="Attendance" value={`${minePct}%`} note="This term" />
+          <Stat title="Attendance" value={mineAtt.length ? `${minePct}%` : "—"} note="This term" />
           <Stat
             title="Fees due"
             value={`₹${mineFees.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0).toLocaleString("en-IN")}`}
@@ -44,53 +44,80 @@ export default function DashboardPage() {
             value={`${state.checkouts.filter((c) => c.studentId === sid && !c.returnedOn).length}`}
             note="Library"
           />
-          <Stat title="Section" value={state.sections.find((s) => s.id === myStudent?.sectionId)?.name ?? "—"} note={state.courses.find((c) => c.id === myStudent?.courseId)?.name ?? ""} />
+          <Stat
+            title="Section"
+            value={state.sections.find((s) => s.id === myStudent?.sectionId)?.name ?? "—"}
+            note={state.courses.find((c) => c.id === myStudent?.courseId)?.name ?? "Not assigned"}
+          />
         </div>
         <div className="mt-6 space-y-3">
+          {urgent.length === 0 ? <p className="text-sm text-muted-foreground">No urgent alerts.</p> : null}
           {urgent.map((n) => (
-            <div key={n.id} className="rounded-lg border-2 border-[#C41E3A] bg-[#FFF8C2] p-3">
+            <div key={n.id} className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center gap-2">
-                <p className="font-semibold">{n.title}</p>
-                <Badge className="bg-[#C41E3A] text-[#FFE566]">Urgent</Badge>
+                <p className="font-semibold text-primary">{n.title}</p>
+                <Badge>Urgent</Badge>
               </div>
-              <p className="text-sm">{n.body}</p>
+              <p className="text-sm text-muted-foreground">{n.body}</p>
             </div>
           ))}
-          <Link href="/app/messages" className="font-semibold underline">
-            Open messages
+          <Link href="/app/messages" className="text-sm font-medium text-primary underline">
+            Open notices
           </Link>
         </div>
       </div>
     );
   }
 
+  const empty = state.students.length === 0 && state.staff.length === 0;
+
   return (
     <div>
-      <PageHeader title="College home" note="GP Pharmacy College ERP. Open a card to add, edit, or view live records." />
+      <PageHeader
+        title="Operations overview"
+        note="Add real college data from the modules below. This portal starts empty."
+      />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat title="Students" value={`${state.students.length}`} note="Files" />
-        <Stat title="Staff" value={`${state.staff.length}`} note="People" />
-        <Stat title="Attendance" value={`${attPct}%`} note="All marked days" />
-        <Stat title="Fees collected" value={`₹${paidFees.toLocaleString("en-IN")}`} note={`Due ₹${dueFees.toLocaleString("en-IN")}`} />
+        <Stat title="Students" value={`${state.students.length}`} note="Active files" />
+        <Stat title="Staff" value={`${state.staff.length}`} note="Faculty and office" />
+        <Stat title="Attendance" value={state.attendance.length ? `${attPct}%` : "—"} note="Marked sessions" />
+        <Stat
+          title="Fees collected"
+          value={`₹${paidFees.toLocaleString("en-IN")}`}
+          note={dueFees ? `Due ₹${dueFees.toLocaleString("en-IN")}` : "No dues"}
+        />
       </div>
+      {empty ? (
+        <Card className="mt-6 border-border">
+          <CardHeader>
+            <CardTitle className="text-primary">Get the college live</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>1. Add departments, then programmes and subject papers.</p>
+            <p>2. Add sections and staff (set a portal password if they should sign in).</p>
+            <p>3. Admit students with photos, parent details, and a login if needed.</p>
+            <p>4. Build the timetable, then mark attendance and fees.</p>
+          </CardContent>
+        </Card>
+      ) : null}
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[
-          ["Students", "Photo, parent, course, section", "/app/students"],
-          ["Staff", "Department and subjects they teach", "/app/staff"],
+          ["Students", "Admission files and photos", "/app/students"],
+          ["Staff", "Department and subjects", "/app/staff"],
           ["Attendance", "Mark by section and paper", "/app/attendance"],
-          ["Timetable", "Tap a cell to set class", "/app/timetable"],
-          ["Exam marks", "Enter and lock papers", "/app/exams"],
-          ["Fees", "Plans, pay, print receipt", "/app/fees"],
+          ["Timetable", "Edit class slots", "/app/timetable"],
+          ["Examinations", "Papers and grades", "/app/exams"],
+          ["Fees", "Plans, collection, receipts", "/app/fees"],
           ["Alerts", "WhatsApp, SMS, email, in-app", "/app/alerts"],
-          ["Library", "Cover photo, issue, return", "/app/library"],
-          ["Audit logs", "Who changed what", "/app/audit"],
+          ["Library", "Catalogue and issue", "/app/library"],
+          ["Audit", "Change history", "/app/audit"],
         ].map(([title, note, href]) => (
           <Link key={href} href={href}>
-            <Card className="h-full border-2 border-[#C41E3A] hover:bg-[#FFF3A0]">
+            <Card className="h-full transition hover:border-secondary hover:shadow-md">
               <CardHeader>
-                <CardTitle className="text-base">{title}</CardTitle>
+                <CardTitle className="text-base text-primary">{title}</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm">{note}</CardContent>
+              <CardContent className="text-sm text-muted-foreground">{note}</CardContent>
             </Card>
           </Link>
         ))}
@@ -101,13 +128,13 @@ export default function DashboardPage() {
 
 function Stat({ title, value, note }: { title: string; value: string; note: string }) {
   return (
-    <Card className="border-2 border-[#C41E3A] bg-[#FFF8C2]">
+    <Card className="border-border shadow-sm">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-2xl font-bold">{value}</p>
-        <p className="text-xs">{note}</p>
+        <p className="text-2xl font-semibold text-primary">{value}</p>
+        <p className="text-xs text-muted-foreground">{note}</p>
       </CardContent>
     </Card>
   );

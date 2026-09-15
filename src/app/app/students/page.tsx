@@ -17,7 +17,7 @@ import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
 import type { Student } from "@/lib/types";
 
-function blank(dept = "d1", course = "c1", section = "s1"): Student {
+function blank(dept = "", course = "", section = ""): Student {
   return {
     id: uid("st"),
     rollNo: "",
@@ -51,6 +51,8 @@ export default function StudentsPage() {
   );
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Student>(blank());
+  const [portalPassword, setPortalPassword] = useState("");
+  const [parentPassword, setParentPassword] = useState("");
 
   function openNew() {
     setForm(blank(state.departments[0]?.id, state.courses.find((c) => c.kind === "programme")?.id, state.sections[0]?.id));
@@ -61,18 +63,16 @@ export default function StudentsPage() {
     <Guard module="students">
       <PageHeader
         title="Student records"
-        note="Add, edit, view, and delete student files. Pick department, then course, then section. Upload a student photo."
+        note="Admit real students. Choose department, then course, then section. Optional portal passwords create student and parent logins."
         action={
           canWrite ? (
-            <Button className="bg-[#C41E3A] text-[#FFE566]" onClick={openNew}>
-              Add student
-            </Button>
+            <Button onClick={openNew}>Add student</Button>
           ) : null
         }
       />
       <DataTable
         rows={rows}
-        empty="No student matches this search."
+        empty="No students yet. Add the first admission file."
         canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.rollNo} ${row.email} ${row.parentName}`.toLowerCase().includes(q)}
         onOpen={(r) => router.push(`/app/students/${r.id}`)}
@@ -102,9 +102,9 @@ export default function StudentsPage() {
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto bg-[#FFF8C2] text-[#C41E3A]">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">{rows.some((r) => r.id === form.id) ? "Edit student" : "New student"}</DialogTitle>
+            <DialogTitle>{rows.some((r) => r.id === form.id) ? "Edit student" : "New student"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
             <PhotoUpload
@@ -233,12 +233,53 @@ export default function StudentsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1">
+              <Label>Student portal password</Label>
+              <Input type="password" value={portalPassword} onChange={(e) => setPortalPassword(e.target.value)} placeholder="Optional" />
+            </div>
+            <div className="space-y-1">
+              <Label>Parent portal password</Label>
+              <Input type="password" value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} placeholder="Optional" />
+            </div>
           </div>
           <Button
-            className="bg-[#C41E3A] text-[#FFE566]"
             disabled={!form.rollNo || !form.name}
             onClick={async () => {
               await save("students", form, `Saved student ${form.name} (${form.rollNo}).`);
+              if (portalPassword && form.email) {
+                await save(
+                  "users",
+                  {
+                    id: uid("u"),
+                    email: form.email.toLowerCase(),
+                    password: portalPassword,
+                    name: form.name,
+                    role: "student",
+                    phone: form.phone,
+                    studentId: form.id,
+                    active: true,
+                  },
+                  `Created student login for ${form.email}.`,
+                );
+              }
+              if (parentPassword && form.parentEmail) {
+                await save(
+                  "users",
+                  {
+                    id: uid("u"),
+                    email: form.parentEmail.toLowerCase(),
+                    password: parentPassword,
+                    name: form.parentName,
+                    role: "parent",
+                    phone: form.parentPhone,
+                    childStudentId: form.id,
+                    active: true,
+                  },
+                  `Created parent login for ${form.parentEmail}.`,
+                );
+              }
+              setPortalPassword("");
+              setParentPassword("");
               setOpen(false);
             }}
           >

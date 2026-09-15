@@ -14,9 +14,9 @@ export default function AttendancePage() {
   const { state, save, allowed, scopedStudentId, user } = useApp();
   const sid = scopedStudentId();
   const [sectionId, setSectionId] = useState(
-    sid ? state.students.find((s) => s.id === sid)?.sectionId ?? "s1" : "s1",
+    sid ? state.students.find((s) => s.id === sid)?.sectionId ?? state.sections[0]?.id ?? "" : state.sections[0]?.id ?? "",
   );
-  const [courseId, setCourseId] = useState("c4");
+  const [courseId, setCourseId] = useState(state.courses.find((c) => c.kind === "subject")?.id ?? "");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const students = useMemo(
     () => state.students.filter((s) => s.sectionId === sectionId && s.status === "active" && (!sid || s.id === sid)),
@@ -44,7 +44,7 @@ export default function AttendancePage() {
         sectionId,
         date,
         status,
-        markedBy: user?.staffId ?? user?.id ?? "t1",
+        markedBy: user?.staffId ?? user?.id ?? "",
       },
       `Marked attendance ${status} for ${studentId} on ${date}.`,
     );
@@ -71,17 +71,22 @@ export default function AttendancePage() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="h-9 w-full rounded-lg border-2 border-[#C41E3A] bg-white px-3 text-sm text-[#C41E3A]"
+            className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm"
           />
         </div>
       </div>
       <div className="space-y-2">
+        {students.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+            No students in this section yet. Admit students first, then mark attendance.
+          </p>
+        ) : null}
         {students.map((st) => {
           const status = statusOf(st.id);
           return (
             <div
               key={st.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2] p-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3"
             >
               <div className="flex items-center gap-3">
                 {st.photoUrl ? (
@@ -90,7 +95,7 @@ export default function AttendancePage() {
                 ) : null}
                 <div>
                   <p className="font-semibold">{st.name}</p>
-                  <p className="text-xs">{st.rollNo}</p>
+                  <p className="text-xs text-muted-foreground">{st.rollNo}</p>
                 </div>
               </div>
               {canWrite ? (
@@ -100,7 +105,6 @@ export default function AttendancePage() {
                       key={s}
                       size="sm"
                       variant={status === s ? "default" : "outline"}
-                      className={status === s ? "bg-[#C41E3A] text-[#FFE566]" : "border-[#C41E3A] text-[#C41E3A]"}
                       onClick={() => void setStatus(st.id, s)}
                     >
                       {s}
@@ -108,7 +112,7 @@ export default function AttendancePage() {
                   ))}
                 </div>
               ) : (
-                <Badge className="bg-[#C41E3A] text-[#FFE566]">{status}</Badge>
+                <Badge>{status}</Badge>
               )}
             </div>
           );

@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     txnId,
-    mode: "demo",
-    note: "Demo GP Pay success. Card data was not stored.",
+    mode: "college",
+    note: "Receipt issued by GP Pharmacy College. Card data was not stored. Add Razorpay keys for bank capture.",
   });
 }

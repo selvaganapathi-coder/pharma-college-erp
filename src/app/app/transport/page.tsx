@@ -33,7 +33,6 @@ export default function TransportPage() {
         action={
           canWrite ? (
             <Button
-              className="bg-[#C41E3A] text-[#FFE566]"
               onClick={() => {
                 setForm({ id: uid("r"), name: "", vehicleNo: "", driver: "", driverPhone: "", stops: "", seats: 30 });
                 setOpen(true);
@@ -45,6 +44,11 @@ export default function TransportPage() {
         }
       />
       <div className="grid gap-4 md:grid-cols-2">
+        {routes.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground md:col-span-2">
+            No bus routes yet. Add the first vehicle and driver.
+          </p>
+        ) : null}
         {routes.map((r) => {
           const riders = state.students.filter((s) => s.busRouteId === r.id);
           return (
@@ -73,10 +77,10 @@ export default function TransportPage() {
                 </div>
                 {canWrite ? (
                   <div className="flex gap-2">
-                    <Button size="sm" className="bg-[#C41E3A] text-[#FFE566]" onClick={() => { setForm(r); setOpen(true); }}>
+                    <Button size="sm" onClick={() => { setForm(r); setOpen(true); }}>
                       Edit
                     </Button>
-                    <Button size="sm" variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={() => void remove("routes", r.id, `Deleted route ${r.name}.`)}>
+                    <Button size="sm" variant="outline" onClick={() => void remove("routes", r.id, `Deleted route ${r.name}.`)}>
                       Delete
                     </Button>
                   </div>
@@ -87,9 +91,9 @@ export default function TransportPage() {
         })}
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto bg-[#FFF8C2]">
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Bus route</DialogTitle>
+            <DialogTitle>Bus route</DialogTitle>
           </DialogHeader>
           {form ? (
             <div className="space-y-3">
@@ -110,8 +114,7 @@ export default function TransportPage() {
                 <Input type="number" value={form.seats} onChange={(e) => setForm({ ...form, seats: Number(e.target.value) })} />
               </div>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
-                onClick={async () => {
+              onClick={async () => {
                   await save("routes", form, `Saved route ${form.name}.`);
                   setOpen(false);
                 }}

@@ -18,7 +18,7 @@ export function DepartmentSelect({
   return (
     <Field label="Department">
       <Select value={value || null} onValueChange={pick(onChange)}>
-        <SelectTrigger className="w-full bg-white text-[#C41E3A]">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="Pick department" />
         </SelectTrigger>
         <SelectContent>
@@ -54,7 +54,7 @@ export function CourseSelect({
   return (
     <Field label="Course">
       <Select value={value || null} onValueChange={pick(onChange)} disabled={!list.length}>
-        <SelectTrigger className="w-full bg-white text-[#C41E3A]">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder={departmentId ? "Pick course" : "Pick department first"} />
         </SelectTrigger>
         <SelectContent>
@@ -84,7 +84,7 @@ export function SectionSelect({
   return (
     <Field label="Section">
       <Select value={value || null} onValueChange={pick(onChange)} disabled={!list.length}>
-        <SelectTrigger className="w-full bg-white text-[#C41E3A]">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder={courseId ? "Pick section" : "Pick course first"} />
         </SelectTrigger>
         <SelectContent>
@@ -114,7 +114,7 @@ export function StaffSelect({
   return (
     <Field label="Staff">
       <Select value={value || null} onValueChange={pick(onChange)}>
-        <SelectTrigger className="w-full bg-white text-[#C41E3A]">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="Pick staff" />
         </SelectTrigger>
         <SelectContent>
@@ -132,7 +132,7 @@ export function StaffSelect({
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[#C41E3A]">{label}</Label>
+      <Label>{label}</Label>
       {children}
     </div>
   );

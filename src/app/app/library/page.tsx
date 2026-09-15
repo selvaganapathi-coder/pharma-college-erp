@@ -44,7 +44,7 @@ export default function LibraryPage() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="border-[#C41E3A] text-[#C41E3A]"
+                
                 onClick={() => {
                   setForm({ id: uid("b"), isbn: "", title: "", author: "", copies: 1 });
                   setBookOpen(true);
@@ -52,7 +52,7 @@ export default function LibraryPage() {
               >
                 Add book
               </Button>
-              <Button className="bg-[#C41E3A] text-[#FFE566]" onClick={() => setOutOpen(true)}>
+              <Button onClick={() => setOutOpen(true)}>
                 Issue book
               </Button>
             </div>
@@ -67,7 +67,7 @@ export default function LibraryPage() {
         <TabsContent value="books">
           <DataTable
             rows={state.books}
-            empty="No books."
+            empty="No books yet. Add the first catalogue title."
             canWrite={canWrite}
             filter={(row, q) => !q || `${row.title} ${row.author} ${row.isbn}`.toLowerCase().includes(q)}
             onEdit={(r) => {
@@ -97,7 +97,7 @@ export default function LibraryPage() {
         <TabsContent value="out">
           <DataTable
             rows={checkouts}
-            empty="No checkouts."
+            empty="No issues yet. Issue a book to a student."
             filter={(row, q) => {
               const b = state.books.find((x) => x.id === row.bookId);
               const s = state.students.find((x) => x.id === row.studentId);
@@ -114,15 +114,15 @@ export default function LibraryPage() {
                   const late = !r.returnedOn && r.dueOn < new Date().toISOString().slice(0, 10);
                   const fine = late ? 20 : 0;
                   return r.returnedOn ? (
-                    <Badge className="bg-[#C41E3A] text-[#FFE566]">Returned {r.returnedOn}</Badge>
+                    <Badge>Returned {r.returnedOn}</Badge>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-[#C41E3A] text-[#FFE566]">{late ? `Overdue · ₹${fine}` : "Out"}</Badge>
+                      <Badge>{late ? `Overdue · ₹${fine}` : "Out"}</Badge>
                       {canWrite ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-[#C41E3A] text-[#C41E3A]"
+                          
                           onClick={() =>
                             void save(
                               "checkouts",
@@ -143,9 +143,9 @@ export default function LibraryPage() {
         </TabsContent>
       </Tabs>
       <Dialog open={bookOpen} onOpenChange={setBookOpen}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Book</DialogTitle>
+            <DialogTitle>Book</DialogTitle>
           </DialogHeader>
           {form ? (
             <div className="space-y-3">
@@ -174,8 +174,7 @@ export default function LibraryPage() {
                 </div>
               </div>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
-                onClick={async () => {
+              onClick={async () => {
                   await save("books", form, `Saved book ${form.title}.`);
                   setBookOpen(false);
                 }}
@@ -187,9 +186,9 @@ export default function LibraryPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={outOpen} onOpenChange={setOutOpen}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Issue book</DialogTitle>
+            <DialogTitle>Issue book</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
@@ -223,7 +222,6 @@ export default function LibraryPage() {
               </Select>
             </div>
             <Button
-              className="bg-[#C41E3A] text-[#FFE566]"
               onClick={async () => {
                 const due = new Date();
                 due.setDate(due.getDate() + 14);

@@ -29,7 +29,6 @@ export default function CoursesPage() {
         action={
           canWrite ? (
             <Button
-              className="bg-[#C41E3A] text-[#FFE566]"
               onClick={() => {
                 setForm({
                   id: uid("c"),
@@ -50,7 +49,7 @@ export default function CoursesPage() {
       />
       <DataTable
         rows={state.courses}
-        empty="No course found."
+        empty="No courses yet. Add a programme or subject paper."
         canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.code}`.toLowerCase().includes(q)}
         onEdit={(r) => {
@@ -68,9 +67,9 @@ export default function CoursesPage() {
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Course</DialogTitle>
+            <DialogTitle>Course</DialogTitle>
           </DialogHeader>
           {form ? (
             <div className="space-y-3">
@@ -110,7 +109,6 @@ export default function CoursesPage() {
                 </div>
               </div>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
                 disabled={!form.name}
                 onClick={async () => {
                   await save("courses", form, `Saved course ${form.name}.`);

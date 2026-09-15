@@ -27,7 +27,7 @@ export default function AuditPage() {
           {
             key: "net",
             header: "Network",
-            cell: (r) => <Badge className="bg-[#C41E3A] text-[#FFE566]">{r.online ? "Online" : "Offline"}</Badge>,
+            cell: (r) => <Badge>{r.online ? "Online" : "Offline"}</Badge>,
           },
         ]}
       />

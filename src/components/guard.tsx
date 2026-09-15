@@ -14,6 +14,6 @@ export function Guard({ module, write, children }: { module: ModuleKey; write?: 
     if (ready && !ok) router.replace("/app");
   }, [ready, ok, router]);
 
-  if (!ok) return <p className="text-sm text-[#6B4A1F]">You cannot open this page.</p>;
+  if (!ok) return <p className="text-sm text-muted-foreground">You cannot open this page.</p>;
   return <>{children}</>;
 }

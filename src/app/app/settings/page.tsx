@@ -51,7 +51,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
-      <Alert className="mt-4 border-2 border-[#C41E3A] bg-[#FFF8C2]">
+      <Alert className="mt-4 border border-border">
         <AlertTitle>Student data</AlertTitle>
         <AlertDescription>Photos sit in Firebase Storage when signed in. Audit logs record every save and delete.</AlertDescription>
       </Alert>

@@ -9,7 +9,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { onAuthStateChanged } from "firebase/auth";
 import type { AppState, CollectionKey, Role, User } from "@/lib/types";
 import { EMPTY_STATE } from "@/lib/types";
 import {
@@ -17,15 +16,16 @@ import {
   loadState,
   makeAudit,
   persistLocal,
+  purgeSampleFromCloud,
   readSession,
   removeRow,
   saveSession,
-  seedCloudIfEmpty,
+  uid,
   uploadPhoto,
   writeRow,
 } from "@/lib/store";
 import { can, type ModuleKey } from "@/lib/rbac";
-import { firebaseSignIn, firebaseSignOut, getFirebase } from "@/lib/firebase";
+import { firebaseSignIn, firebaseSignOut } from "@/lib/firebase";
 
 type AppContextValue = {
   ready: boolean;
@@ -33,7 +33,9 @@ type AppContextValue = {
   user: User | null;
   state: AppState;
   firebaseNote: string | null;
+  needsSetup: boolean;
   login: (email: string, password: string) => Promise<string | null>;
+  registerAdmin: (input: { name: string; email: string; password: string; phone: string }) => Promise<string | null>;
   logout: () => void;
   allowed: (module: ModuleKey, action?: "read" | "write") => boolean;
   scopedStudentId: () => string | undefined;
@@ -73,24 +75,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return next;
       });
     });
-    const fb = getFirebase();
-    const unsubAuth = fb
-      ? onAuthStateChanged(fb.auth, async (fbUser) => {
-          if (!alive || !fbUser) return;
-          await seedCloudIfEmpty(state);
-        })
-      : undefined;
     return () => {
       alive = false;
       unsubLive();
-      unsubAuth?.();
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed uses latest state on first auth
   }, []);
 
   const user = state.users.find((u) => u.id === userId && u.active) ?? null;
+  const needsSetup = ready && state.users.length === 0;
 
   const audit = useCallback(
     async (action: string, entity: string, entityId: string, details: string) => {
@@ -141,16 +135,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const found = state.users.find(
         (u) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password && u.active,
       );
-      if (!found) return "Email or password is wrong. Try a demo login below.";
+      if (!found) return "Email or password is wrong.";
       const fb = await firebaseSignIn(found.email, password);
       setFirebaseNote(fb.note);
       setUserId(found.id);
       saveSession(found.id);
-      if (fb.ok) await seedCloudIfEmpty(state);
-      await audit("login", "session", found.id, `${found.role} signed in. ${fb.note}`);
+      if (fb.ok) await purgeSampleFromCloud();
+      await audit("login", "session", found.id, `${found.role} signed in.`);
       return null;
     },
-    [audit, state],
+    [audit, state.users],
+  );
+
+  const registerAdmin = useCallback(
+    async (input: { name: string; email: string; password: string; phone: string }) => {
+      if (state.users.length > 0) return "An admin already exists. Please sign in.";
+      if (!input.name.trim() || !input.email.trim() || input.password.length < 8) {
+        return "Enter your name, email, and a password of at least 8 characters.";
+      }
+      const account: User = {
+        id: uid("u"),
+        email: input.email.trim().toLowerCase(),
+        password: input.password,
+        name: input.name.trim(),
+        role: "admin",
+        phone: input.phone.trim(),
+        active: true,
+      };
+      const fb = await firebaseSignIn(account.email, account.password);
+      setFirebaseNote(fb.note);
+      setState((prev) => {
+        const next = { ...prev, users: [account, ...prev.users] };
+        void persistLocal(next);
+        return next;
+      });
+      await writeRow("users", account);
+      setUserId(account.id);
+      saveSession(account.id);
+      if (fb.ok) await purgeSampleFromCloud();
+      return null;
+    },
+    [state.users.length],
   );
 
   const logout = useCallback(() => {
@@ -185,7 +210,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user,
       state,
       firebaseNote,
+      needsSetup,
       login,
+      registerAdmin,
       logout,
       allowed,
       scopedStudentId,
@@ -193,7 +220,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       remove,
       upload,
     }),
-    [ready, online, user, state, firebaseNote, login, logout, allowed, scopedStudentId, save, remove, upload],
+    [
+      ready,
+      online,
+      user,
+      state,
+      firebaseNote,
+      needsSetup,
+      login,
+      registerAdmin,
+      logout,
+      allowed,
+      scopedStudentId,
+      save,
+      remove,
+      upload,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

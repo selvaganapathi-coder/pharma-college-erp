@@ -27,7 +27,6 @@ export default function SectionsPage() {
         action={
           canWrite ? (
             <Button
-              className="bg-[#C41E3A] text-[#FFE566]"
               onClick={() => {
                 const course = state.courses.find((c) => c.kind === "programme");
                 setForm({
@@ -48,7 +47,7 @@ export default function SectionsPage() {
       />
       <DataTable
         rows={state.sections}
-        empty="No section found."
+        empty="No sections yet. Add a class section after a programme."
         canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.room}`.toLowerCase().includes(q)}
         onEdit={(r) => {
@@ -66,9 +65,9 @@ export default function SectionsPage() {
         ]}
       />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-[#FFF8C2]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#C41E3A]">Section</DialogTitle>
+            <DialogTitle>Section</DialogTitle>
           </DialogHeader>
           {form ? (
             <div className="space-y-3">
@@ -97,7 +96,6 @@ export default function SectionsPage() {
                 </div>
               </div>
               <Button
-                className="bg-[#C41E3A] text-[#FFE566]"
                 disabled={!form.name}
                 onClick={async () => {
                   await save("sections", form, `Saved section ${form.name}.`);

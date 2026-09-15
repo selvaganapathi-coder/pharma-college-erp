@@ -20,13 +20,13 @@ export default function StaffFilePage() {
         title={t.name}
         note={`${t.staffCode} · ${t.title}`}
         action={
-          <Button variant="outline" className="border-[#C41E3A] text-[#C41E3A]" onClick={() => router.push("/app/staff")}>
+          <Button variant="outline" onClick={() => router.push("/app/staff")}>
             Back
           </Button>
         }
       />
       <div className="grid gap-4 md:grid-cols-[200px_1fr]">
-        <div className="size-40 overflow-hidden rounded-xl border-2 border-[#C41E3A] bg-[#FFF8C2]">
+        <div className="size-40 overflow-hidden rounded-xl border border-border">
           {t.photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={t.photoUrl} alt={t.name} className="size-full object-cover" />
