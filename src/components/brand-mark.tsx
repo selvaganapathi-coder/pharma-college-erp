@@ -20,10 +20,10 @@ export function BrandMark({
       </span>
       <span className="min-w-0">
         <span className={`block truncate text-sm font-bold leading-tight ${light ? "text-white" : "text-primary"}`}>
-          Pharma College ERP
+          GP Pharmacy College
         </span>
         <span className={`block truncate text-[10px] font-medium tracking-[0.16em] uppercase ${light ? "text-secondary" : "text-muted-foreground"}`}>
-          Learn · Practice · Lead
+          Learn • Practice • Lead
         </span>
       </span>
     </div>

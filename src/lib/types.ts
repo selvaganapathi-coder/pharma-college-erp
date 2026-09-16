@@ -12,6 +12,8 @@ export type User = {
   staffId?: string;
   studentId?: string;
   childStudentId?: string;
+  /** Future multi-child support. Client cannot change this; Firestore locks it. */
+  studentIds?: string[];
   photoUrl?: string;
   active: boolean;
 };

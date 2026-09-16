@@ -1,20 +1,21 @@
 export const PERMISSIONS = {
-  students: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
+  students: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
   staff: { read: ["admin", "staff"], write: ["admin"] },
   departments: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
   courses: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
   sections: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
-  timetable: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
+  timetable: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
   attendance: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
   exams: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
-  fees: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
+  fees: { read: ["admin", "student", "parent"], write: ["admin"] },
   notices: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
   messages: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
-  reports: { read: ["admin", "staff"], write: ["admin"] },
-  transport: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
-  library: { read: ["admin", "staff", "student"], write: ["admin", "staff"] },
+  reports: { read: ["admin"], write: ["admin"] },
+  transport: { read: ["admin"], write: ["admin"] },
+  library: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
   audit: { read: ["admin"], write: ["admin"] },
   settings: { read: ["admin"], write: ["admin"] },
+  profile: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff", "student", "parent"] },
 } as const;
 
 export type ModuleKey = keyof typeof PERMISSIONS;

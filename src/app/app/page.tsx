@@ -8,17 +8,15 @@ import { AlertCard, severityRank } from "@/components/alert-card";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/lib/app-context";
-import { getCourseName, getSectionName, getStaffName, getSubjectName } from "@/lib/references";
+import { getStaffName, getSubjectName } from "@/lib/references";
 import { formatClock, slotTimes } from "@/lib/schedule";
 import { DAYS } from "@/lib/types";
 import { staffTypeOf } from "@/lib/staff";
 import type { AlertSeverity } from "@/lib/types";
 
 export default function DashboardPage() {
-  const { user, state, scopedStudentId, allowed } = useApp();
+  const { user, state, allowed } = useApp();
   const router = useRouter();
-  const sid = scopedStudentId();
-  const myStudent = state.students.find((s) => s.id === sid);
   const liveStudents = state.students.filter((s) => !s.deletedAt);
   const liveStaff = state.staff.filter((s) => !s.deletedAt);
   const today = new Date().toISOString().slice(0, 10);
@@ -33,34 +31,12 @@ export default function DashboardPage() {
     .sort((a, b) => severityRank((a.severity ?? (a.urgent ? "URGENT" : "INFO")) as AlertSeverity) - severityRank((b.severity ?? "INFO") as AlertSeverity))
     .slice(0, 4);
   const activity = state.auditLogs.slice(0, 6);
-  const mineFees = sid ? state.fees.filter((f) => f.studentId === sid) : [];
-  const mineAtt = sid ? state.attendance.filter((a) => a.studentId === sid) : [];
-  const minePct = mineAtt.length ? Math.round((mineAtt.filter((a) => a.status === "present").length / mineAtt.length) * 100) : 0;
-  const mySection = myStudent?.sectionId;
   const todaySlots = state.timetable
-    .filter((t) => t.day === weekday && (!mySection || t.sectionId === mySection))
+    .filter((t) => t.day === weekday)
     .sort((a, b) => slotTimes(a).start.localeCompare(slotTimes(b).start))
     .slice(0, 6);
 
   if (!user) return null;
-
-  if (user.role === "student" || user.role === "parent") {
-    return (
-      <div>
-        <Welcome name={user.name} note={user.role === "parent" ? `Linked student: ${myStudent?.name ?? "not linked yet"}.` : "Your attendance, fees, library, and notices."} />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="Attendance" value={mineAtt.length ? `${minePct}%` : "—"} note="Marked sessions" icon={<ClipboardCheck className="size-5" />} tone="gold" />
-          <StatCard title="Fees due" value={`₹${mineFees.filter((f) => f.status !== "paid").reduce((s, f) => s + f.amount, 0).toLocaleString("en-IN")}`} note="Pay from Fees" icon={<Receipt className="size-5" />} tone="red" />
-          <StatCard title="Books out" value={`${state.checkouts.filter((c) => c.studentId === sid && !c.returnedOn).length}`} note="Library" icon={<BookOpen className="size-5" />} />
-          <StatCard title="Section" value={getSectionName(state, myStudent?.sectionId)} note={getCourseName(state, myStudent?.courseId)} icon={<GraduationCap className="size-5" />} tone="maroon" />
-        </div>
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <ScheduleCard slots={todaySlots} weekday={weekday} />
-          <AlertsColumn notices={important} />
-        </div>
-      </div>
-    );
-  }
 
   const empty = liveStudents.length === 0 && liveStaff.length === 0;
   const programmes = state.courses.filter((c) => c.kind === "programme" || c.years >= 2);

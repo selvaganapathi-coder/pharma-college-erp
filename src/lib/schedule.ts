@@ -54,10 +54,47 @@ export function formatClock(hhmm: string) {
 }
 
 export function slotTimes(slot: Pick<TimetableSlot, "period" | "startTime" | "endTime">) {
+  const startRaw = (slot.startTime ?? "").trim();
+  const endRaw = (slot.endTime ?? "").trim();
+  if (startRaw && endRaw) {
+    return { start: toHHmm(startRaw), end: toHHmm(endRaw) };
+  }
   const fallback = PERIOD_FALLBACK[slot.period] ?? { start: toHHmm(slot.period), end: addMinutes(toHHmm(slot.period), 60) };
-  const start = slot.startTime ? toHHmm(slot.startTime) : fallback.start;
-  const end = slot.endTime ? toHHmm(slot.endTime) : fallback.end || addMinutes(start, 60);
+  const start = startRaw ? toHHmm(startRaw) : fallback.start;
+  const end = endRaw ? toHHmm(endRaw) : fallback.end || addMinutes(start, 60);
   return { start, end };
+}
+
+/** Canonical timetable times. `period` is always derived and never kept as a second source of truth. */
+export function normalizeTimetableSlot(slot: TimetableSlot): TimetableSlot {
+  const times = slotTimes(slot);
+  const start = times.start || "09:00";
+  const end = times.end || addMinutes(start, 60);
+  return {
+    ...slot,
+    id: slot.id,
+    startTime: start,
+    endTime: end,
+    period: periodLabel(start, end),
+    courseId: slot.courseId,
+  };
+}
+
+export function subjectIdOf(slot: Pick<TimetableSlot, "courseId">) {
+  return slot.courseId;
+}
+
+export const DAY_START_MIN = 8 * 60;
+export const DAY_END_MIN = 18 * 60;
+
+export function timeAxis(stepMin = 60) {
+  const rows: { start: string; end: string; label: string; minutes: number }[] = [];
+  for (let m = DAY_START_MIN; m < DAY_END_MIN; m += stepMin) {
+    const start = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    const end = addMinutes(start, stepMin);
+    rows.push({ start, end, label: formatClock(start), minutes: m });
+  }
+  return rows;
 }
 
 export function periodLabel(start: string, end: string) {

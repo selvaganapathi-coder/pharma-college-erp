@@ -14,30 +14,31 @@ import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
 import { toast } from "sonner";
-import { DAYS, PERIODS, type TimetableSlot } from "@/lib/types";
+import { DAYS, type TimetableSlot } from "@/lib/types";
 import {
   addMinutes,
+  DAY_END_MIN,
+  DAY_START_MIN,
   findTimetableConflicts,
   formatClock,
+  normalizeTimetableSlot,
   periodLabel,
   slotTimes,
   toHHmm,
+  toMinutes,
   validateSlotTimes,
 } from "@/lib/schedule";
 import { getSectionShortName, getStaffName, getSubjectName } from "@/lib/references";
 
 export default function TimetablePage() {
-  const { state, save, remove, allowed, scopedStudentId } = useApp();
-  const sid = scopedStudentId();
-  const defaultSection = sid
-    ? state.students.find((s) => s.id === sid)?.sectionId ?? state.sections[0]?.id
-    : state.sections[0]?.id;
+  const { state, save, remove, allowed } = useApp();
+  const defaultSection = state.sections[0]?.id;
   const [sectionId, setSectionId] = useState(defaultSection ?? "");
   const [deptId, setDeptId] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [dayTab, setDayTab] = useState("Monday");
   const [view, setView] = useState<"week" | "day">("week");
-  const canWrite = allowed("timetable", "write") && !sid;
+  const canWrite = allowed("timetable", "write");
   const [edit, setEdit] = useState<TimetableSlot | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,25 +75,18 @@ export default function TimetablePage() {
   }
 
   function openEdit(slot: TimetableSlot) {
-    const times = slotTimes(slot);
-    setEdit({ ...slot, startTime: times.start, endTime: times.end, period: periodLabel(times.start, times.end) });
+    setEdit(normalizeTimetableSlot(slot));
     setIsNew(false);
     setError(null);
   }
 
-  const timeRows = useMemo(() => {
-    const map = new Map<string, { start: string; end: string; label: string }>();
-    for (const p of PERIODS) {
-      const start = toHHmm(p) || "09:00";
-      const end = addMinutes(start, 60);
-      map.set(`${start}|${end}`, { start, end, label: periodLabel(start, end) });
-    }
-    for (const s of slots) {
-      const t = slotTimes(s);
-      map.set(`${t.start}|${t.end}`, { start: t.start, end: t.end, label: periodLabel(t.start, t.end) });
-    }
-    return [...map.values()].sort((a, b) => a.start.localeCompare(b.start));
-  }, [slots]);
+  const axis = useMemo(() => {
+    const hours: number[] = [];
+    for (let m = DAY_START_MIN; m < DAY_END_MIN; m += 60) hours.push(m);
+    return hours;
+  }, []);
+  const pxPerMin = 1.15;
+  const boardHeight = (DAY_END_MIN - DAY_START_MIN) * pxPerMin;
 
   return (
     <Guard module="timetable">
@@ -149,63 +143,65 @@ export default function TimetablePage() {
         ))}
       </div>
       <div className={`${view === "week" ? "mb-6 hidden overflow-x-auto rounded-2xl bg-card p-3 ring-1 ring-border/80 erp-shadow md:block" : "hidden"}`}>
-        <table className="w-full min-w-[860px] text-sm text-primary">
-          <thead>
-            <tr>
-              <th className="p-3 text-left text-muted-foreground">Time</th>
-              {DAYS.map((d) => (
-                <th key={d} className="p-3 text-left">
-                  {d}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {timeRows.map((row) => (
-              <tr key={row.label} className="border-t border-border">
-                <td className="p-3 font-semibold">{row.label}</td>
-                {DAYS.map((d) => {
-                  const slot = slots.find((s) => {
-                    const t = slotTimes(s);
-                    return s.day === d && t.start === row.start && t.end === row.end;
-                  });
-                  const course = slot ? getSubjectName(state, slot.courseId) : "";
-                  const staff = slot ? getStaffName(state, slot.staffId) : "";
-                  return (
-                    <td key={d} className="p-2 align-top">
-                      <div
-                        className={`w-full rounded-xl p-2.5 text-left shadow-sm ${
-                          slot
-                            ? ["bg-rose-100 text-rose-950", "bg-amber-100 text-amber-950", "bg-emerald-100 text-emerald-950", "bg-sky-100 text-sky-950", "bg-violet-100 text-violet-950"][
-                                Math.abs(slot.courseId.split("").reduce((n, ch) => n + ch.charCodeAt(0), 0)) % 5
-                              ]
-                            : "border border-dashed border-border bg-card text-muted-foreground"
-                        }`}
-                      >
-                        {slot ? (
-                          <>
-                            <p className="font-medium">{course}</p>
-                            <p className="text-xs">{staff}</p>
-                            <p className="text-xs">{slot.room} · {formatClock(slotTimes(slot).start)}–{formatClock(slotTimes(slot).end)}</p>
-                            {canWrite ? (
-                              <Button size="sm" variant="outline" className="mt-2 min-h-9" onClick={() => openEdit(slot)}>
-                                Edit
-                              </Button>
-                            ) : null}
-                          </>
-                        ) : (
-                          <button type="button" disabled={!canWrite} className="text-xs" onClick={() => openNew(d, row.start)}>
-                            {canWrite ? "Tap to add" : "Free"}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
+        <div className="min-w-[960px]">
+          <div className="grid grid-cols-[72px_repeat(6,minmax(0,1fr))]">
+            <div />
+            {DAYS.map((d) => (
+              <div key={d} className="p-2 text-sm font-semibold text-primary">
+                {d}
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+          <div className="grid grid-cols-[72px_repeat(6,minmax(0,1fr))]">
+            <div className="relative" style={{ height: boardHeight }}>
+              {axis.map((m) => (
+                <p key={m} className="absolute text-[11px] text-muted-foreground" style={{ top: (m - DAY_START_MIN) * pxPerMin }}>
+                  {formatClock(`${String(Math.floor(m / 60)).padStart(2, "0")}:00`)}
+                </p>
+              ))}
+            </div>
+            {DAYS.map((d) => (
+              <div key={d} className="relative border-l border-border/70" style={{ height: boardHeight }}>
+                {axis.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    disabled={!canWrite}
+                    className="absolute left-0 right-0 border-t border-dashed border-border/50"
+                    style={{ top: (m - DAY_START_MIN) * pxPerMin, height: 60 * pxPerMin }}
+                    onClick={() => openNew(d, `${String(Math.floor(m / 60)).padStart(2, "0")}:00`)}
+                    aria-label={`Add class ${d} ${formatClock(`${String(Math.floor(m / 60)).padStart(2, "0")}:00`)}`}
+                  />
+                ))}
+                {slots
+                  .filter((s) => s.day === d)
+                  .map((slot) => {
+                    const t = slotTimes(normalizeTimetableSlot(slot));
+                    const start = toMinutes(t.start);
+                    const end = toMinutes(t.end);
+                    const top = (start - DAY_START_MIN) * pxPerMin;
+                    const height = Math.max(28, (end - start) * pxPerMin);
+                    const palette = ["bg-rose-100 text-rose-950", "bg-amber-100 text-amber-950", "bg-emerald-100 text-emerald-950", "bg-sky-100 text-sky-950", "bg-violet-100 text-violet-950"];
+                    const color = palette[Math.abs(slot.courseId.split("").reduce((n, ch) => n + ch.charCodeAt(0), 0)) % 5];
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        className={`absolute right-1 left-1 z-10 overflow-hidden rounded-xl p-2 text-left shadow-sm ${color}`}
+                        style={{ top, height }}
+                        onClick={() => canWrite && openEdit(slot)}
+                      >
+                        <p className="text-[11px] font-semibold">{formatClock(t.start)} – {formatClock(t.end)}</p>
+                        <p className="truncate text-sm font-medium">{getSubjectName(state, slot.courseId)}</p>
+                        <p className="truncate text-xs">{getStaffName(state, slot.staffId)}</p>
+                        <p className="truncate text-xs">{slot.room}</p>
+                      </button>
+                    );
+                  })}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       <div className={view === "day" ? "grid gap-3" : "grid gap-3 md:hidden"}>
         {slots
@@ -275,13 +271,12 @@ export default function TimetablePage() {
             setError("Subject and staff are required.");
             return;
           }
-          const payload: TimetableSlot = {
+          const payload = normalizeTimetableSlot({
             ...edit,
             startTime: start,
             endTime: end,
-            period: periodLabel(start, end),
             sectionId: edit.sectionId || sectionId,
-          };
+          });
           const conflicts = findTimetableConflicts(payload, state.timetable, state.staff);
           if (conflicts.length) {
             setError(`Schedule conflict\n${conflicts[0].message}`);
@@ -290,7 +285,7 @@ export default function TimetablePage() {
           }
           setSaving(true);
           try {
-            const result = await save("timetable", payload, `Updated timetable for ${payload.day}.`);
+            const result = await save("timetable", payload, `Updated timetable ${payload.id} ${payload.day} ${payload.period}.`);
             if (!result.ok) {
               setError(result.error ?? "Unable to synchronize changes with the cloud.");
               return;
@@ -348,11 +343,11 @@ function SlotFields({
       <SectionSelect sections={state.sections} value={form.sectionId} onChange={(id) => onChange({ ...form, sectionId: id })} />
       <div className="space-y-1">
         <Label>Start time</Label>
-        <Input type="time" value={form.startTime || slotTimes(form).start} onChange={(e) => onChange({ ...form, startTime: e.target.value })} />
+        <Input type="time" value={form.startTime || slotTimes(form).start} onChange={(e) => onChange(normalizeTimetableSlot({ ...form, startTime: e.target.value }))} />
       </div>
       <div className="space-y-1">
         <Label>End time</Label>
-        <Input type="time" value={form.endTime || slotTimes(form).end} onChange={(e) => onChange({ ...form, endTime: e.target.value })} />
+        <Input type="time" value={form.endTime || slotTimes(form).end} onChange={(e) => onChange(normalizeTimetableSlot({ ...form, endTime: e.target.value }))} />
         <FieldError message={timeError} />
       </div>
       <CourseSelect

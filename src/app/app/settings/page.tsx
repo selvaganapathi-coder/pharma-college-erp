@@ -14,7 +14,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" note="College platform configuration. Secrets stay in environment variables — this screen reports status, it does not store keys." />
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="College information">
-          <p className="text-sm">GP Pharmacy College · Pharma College ERP</p>
+          <p className="text-sm">GP Pharmacy College · College Management System</p>
           <p className="text-xs text-muted-foreground">Learn · Practice · Lead</p>
         </SectionCard>
         <SectionCard title="User & roles">

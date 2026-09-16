@@ -19,17 +19,38 @@ service cloud.firestore {
     function isOffice() {
       return isAdmin() || isStaff();
     }
-    function scopedStudent() {
-      return hasProfile() && (
-        (profile().role == 'student' && profile().studentId is string)
-        || (profile().role == 'parent' && profile().childStudentId is string)
-      );
+    function isStudentRole() {
+      return hasProfile() && profile().role == 'student' && profile().active == true && profile().studentId is string;
+    }
+    function isParentRole() {
+      return hasProfile() && profile().role == 'parent' && profile().active == true;
     }
     function myStudentId() {
       return profile().role == 'student' ? profile().studentId : profile().childStudentId;
     }
+    function linkedStudent(id) {
+      return (isStudentRole() && profile().studentId == id)
+        || (isParentRole() && profile().childStudentId == id)
+        || (isParentRole() && profile().studentIds is list && id in profile().studentIds);
+    }
+    function scopedStudent() {
+      return isStudentRole() || (isParentRole() && (profile().childStudentId is string || profile().studentIds is list));
+    }
+    function mySectionId() {
+      return get(/databases/$(database)/documents/students/$(myStudentId())).data.sectionId;
+    }
+    function staffDept() {
+      return get(/databases/$(database)/documents/staff/$(profile().staffId)).data.departmentId;
+    }
+    function hasStaffLink() {
+      return isStaff() && profile().staffId is string
+        && exists(/databases/$(database)/documents/staff/$(profile().staffId));
+    }
     function setupOpen() {
       return !exists(/databases/$(database)/documents/meta/setup);
+    }
+    function noticeAudience() {
+      return resource.data.audience is string ? resource.data.audience.lower() : 'all';
     }
 
     match /meta/setup {
@@ -49,7 +70,7 @@ service cloud.firestore {
         && request.resource.data.role == 'admin'
         && request.resource.data.active == true
         && !request.resource.data.keys().hasAny(['password']);
-      allow create: if isOffice()
+      allow create: if isAdmin()
         && request.resource.data.role in ['staff', 'student', 'parent']
         && request.resource.data.role != 'admin'
         && !request.resource.data.keys().hasAny(['password']);
@@ -59,24 +80,33 @@ service cloud.firestore {
       allow update: if signedIn() && request.auth.uid == userId
         && request.resource.data.role == resource.data.role
         && request.resource.data.active == resource.data.active
+        && request.resource.data.get('studentId', '') == resource.data.get('studentId', '')
+        && request.resource.data.get('staffId', '') == resource.data.get('staffId', '')
+        && request.resource.data.get('childStudentId', '') == resource.data.get('childStudentId', '')
+        && request.resource.data.get('studentIds', []) == resource.data.get('studentIds', [])
         && !request.resource.data.keys().hasAny(['password']);
       allow delete: if isAdmin();
     }
 
     match /departments/{id} {
-      allow read: if signedIn();
+      allow get: if signedIn();
+      allow list: if isOffice();
       allow write: if isAdmin();
     }
     match /courses/{id} {
-      allow read: if signedIn();
+      allow get: if signedIn();
+      allow list: if isOffice()
+        || (hasStaffLink() && resource.data.departmentId == staffDept());
       allow write: if isAdmin();
     }
     match /sections/{id} {
-      allow read: if signedIn();
+      allow get: if signedIn();
+      allow list: if isOffice();
       allow write: if isAdmin();
     }
     match /staff/{id} {
-      allow read: if isOffice();
+      allow get: if isAdmin() || (isStaff() && profile().staffId == id) || signedIn();
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
     function validStudentWrite() {
@@ -92,75 +122,111 @@ service cloud.firestore {
     }
 
     match /students/{id} {
-      allow get: if isOffice() || (scopedStudent() && myStudentId() == id);
-      allow list: if isOffice();
-      allow create: if isOffice()
+      allow get: if isAdmin() || linkedStudent(id)
+        || (hasStaffLink() && resource.data.departmentId == staffDept());
+      allow list: if isAdmin()
+        || (hasStaffLink() && resource.data.departmentId == staffDept());
+      allow create: if isAdmin()
         && validStudentWrite()
         && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status in ['active', 'left']);
-      allow update: if isOffice()
+      allow update: if isAdmin()
         && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status in ['active', 'left'])
         && !request.resource.data.keys().hasAny(['password'])
         && (validStudentWrite() || request.resource.data.deletedAt is string);
+      allow update: if linkedStudent(id) && isStudentRole()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone', 'address', 'photoUrl'])
+        && request.resource.data.departmentId == resource.data.departmentId
+        && request.resource.data.courseId == resource.data.courseId
+        && request.resource.data.sectionId == resource.data.sectionId
+        && request.resource.data.rollNo == resource.data.rollNo
+        && request.resource.data.year == resource.data.year
+        && request.resource.data.status == resource.data.status;
       allow delete: if isAdmin();
     }
     match /timetable/{id} {
-      allow read: if signedIn();
-      allow write: if isOffice();
+      allow get: if isAdmin()
+        || (isStaff() && resource.data.staffId == profile().staffId)
+        || (scopedStudent() && resource.data.sectionId == mySectionId());
+      allow list: if isAdmin()
+        || (isStaff() && resource.data.staffId == profile().staffId)
+        || (scopedStudent() && resource.data.sectionId == mySectionId());
+      allow create, update, delete: if isAdmin();
     }
     match /attendance/{id} {
-      allow read: if isOffice() || (scopedStudent() && resource.data.studentId == myStudentId());
-      allow create, update: if isOffice()
+      allow get, list: if isAdmin()
+        || (hasStaffLink() && exists(/databases/$(database)/documents/students/$(resource.data.studentId))
+            && get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.departmentId == staffDept())
+        || (scopedStudent() && resource.data.studentId == myStudentId())
+        || (isParentRole() && linkedStudent(resource.data.studentId));
+      allow create, update: if (isAdmin() || hasStaffLink())
         && request.resource.data.status in ['present', 'absent', 'late']
         && request.resource.data.studentId is string
         && request.resource.data.date is string;
       allow delete: if isAdmin();
     }
     match /exams/{id} {
-      allow read: if signedIn();
-      allow write: if isOffice();
+      allow get, list: if isAdmin()
+        || (hasStaffLink() && exists(/databases/$(database)/documents/sections/$(resource.data.sectionId))
+            && get(/databases/$(database)/documents/courses/$(get(/databases/$(database)/documents/sections/$(resource.data.sectionId)).data.courseId)).data.departmentId == staffDept())
+        || (scopedStudent() && resource.data.sectionId == mySectionId());
+      allow write: if isAdmin() || isStaff();
     }
     match /marks/{id} {
-      allow read: if isOffice() || (scopedStudent() && resource.data.studentId == myStudentId());
-      allow create, update: if isOffice()
+      allow get, list: if isAdmin()
+        || (hasStaffLink() && exists(/databases/$(database)/documents/students/$(resource.data.studentId))
+            && get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.departmentId == staffDept())
+        || (scopedStudent() && resource.data.studentId == myStudentId())
+        || (isParentRole() && linkedStudent(resource.data.studentId));
+      allow create, update: if (isAdmin() || isStaff())
         && request.resource.data.marks is number
         && request.resource.data.marks >= 0;
       allow delete: if isAdmin();
     }
     match /feePlans/{id} {
-      allow read: if isOffice();
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
     match /fees/{id} {
-      allow read: if isAdmin()
-        || (isStaff() && true)
-        || (scopedStudent() && resource.data.studentId == myStudentId());
+      allow get, list: if isAdmin()
+        || (scopedStudent() && resource.data.studentId == myStudentId())
+        || (isParentRole() && linkedStudent(resource.data.studentId));
       allow create: if isAdmin() && request.resource.data.status in ['due', 'late', 'partial'];
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     match /notices/{id} {
-      allow read: if signedIn();
+      allow get, list: if isAdmin()
+        || (isStaff() && !(noticeAudience() in ['students', 'student', 'parents', 'parent']))
+        || (scopedStudent() && resource.data.studentId == myStudentId())
+        || (isParentRole() && linkedStudent(resource.data.studentId))
+        || (scopedStudent() && resource.data.sectionId == mySectionId())
+        || (scopedStudent() && !(resource.data.studentId is string) && noticeAudience() in ['all', 'students', 'student'] && isStudentRole())
+        || (scopedStudent() && !(resource.data.studentId is string) && noticeAudience() in ['all', 'parents', 'parent'] && isParentRole());
       allow create, update: if isOffice()
         && request.resource.data.title is string
         && request.resource.data.body is string;
       allow delete: if isAdmin();
     }
     match /messages/{id} {
-      allow read: if signedIn();
+      allow get, list: if isAdmin() || isStaff()
+        || (scopedStudent() && (!(resource.data.sectionId is string) || resource.data.sectionId == mySectionId()));
       allow create, update: if isOffice();
       allow delete: if isAdmin();
     }
     match /routes/{id} {
-      allow read: if signedIn();
+      allow get: if signedIn();
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
     match /books/{id} {
-      allow read: if isOffice() || (hasProfile() && profile().role == 'student');
-      allow write: if isOffice();
+      allow read: if isAdmin() || isStudentRole() || isParentRole();
+      allow write: if isAdmin();
     }
     match /checkouts/{id} {
-      allow read: if isOffice() || (scopedStudent() && resource.data.studentId == myStudentId());
-      allow write: if isOffice();
+      allow get, list: if isAdmin()
+        || (scopedStudent() && resource.data.studentId == myStudentId())
+        || (isParentRole() && linkedStudent(resource.data.studentId));
+      allow write: if isAdmin();
     }
     match /payments/{id} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);

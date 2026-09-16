@@ -10,8 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { BrandMark } from "@/components/brand-mark";
 import { useApp } from "@/lib/app-context";
 import { firebaseResetPassword } from "@/lib/firebase";
+import { accessDeniedMessage, loginPortalMatchesRole, portalHome, type LoginPortal } from "@/lib/portals";
+import { COLLEGE_NAME, COLLEGE_SYSTEM, COLLEGE_TAGLINE } from "@/lib/brand";
 
-const PORTALS: { id: "office" | "student" | "parent"; label: string }[] = [
+const PORTALS: { id: LoginPortal; label: string }[] = [
   { id: "office", label: "Admin/Staff" },
   { id: "student", label: "Student" },
   { id: "parent", label: "Parent" },
@@ -21,7 +23,7 @@ export default function LoginPage() {
   const { ready, user, login, registerAdmin, needsSetup } = useApp();
   const router = useRouter();
   const [mode, setMode] = useState<"in" | "setup">("in");
-  const [portal, setPortal] = useState<"office" | "student" | "parent">("office");
+  const [portal, setPortal] = useState<LoginPortal>("office");
   const view = mode;
   const [name, setName] = useState("");
   const [email, setEmail] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("gp-login-email") ?? ""));
@@ -33,23 +35,27 @@ export default function LoginPage() {
   const [resetNote, setResetNote] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ready && user) router.replace("/app");
+    if (ready && user) router.replace(portalHome(user.role));
   }, [ready, user, router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setResetNote(null);
-    const msg =
+    const result =
       view === "setup"
-        ? await registerAdmin({ name, email, password, phone })
+        ? { error: await registerAdmin({ name, email, password, phone }), role: "admin" as const }
         : await login(email, password);
     setBusy(false);
-    if (msg) setError(msg);
+    if (result.error) setError(result.error);
     else {
       if (remember) localStorage.setItem("gp-login-email", email.trim().toLowerCase());
       else localStorage.removeItem("gp-login-email");
-      router.replace("/app");
+      const role = result.role ?? user?.role;
+      if (role && !loginPortalMatchesRole(portal, role)) {
+        setError(accessDeniedMessage(role));
+      }
+      if (role) router.replace(portalHome(role));
     }
   }
 
@@ -58,8 +64,9 @@ export default function LoginPage() {
       <section className="flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-8 erp-shadow">
           <BrandMark />
-          <h1 className="mt-8 text-3xl font-semibold text-primary">Welcome Back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to your account</p>
+          <h1 className="mt-8 text-3xl font-semibold text-primary">Welcome to {COLLEGE_NAME}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{COLLEGE_SYSTEM}</p>
+          <p className="text-xs tracking-[0.16em] text-muted-foreground uppercase">{COLLEGE_TAGLINE}</p>
           {view === "in" ? (
             <div className="mt-5 grid grid-cols-3 rounded-full bg-muted p-1 text-xs font-semibold">
               {PORTALS.map((item) => (
@@ -177,7 +184,7 @@ export default function LoginPage() {
               </li>
             ))}
           </ul>
-          <p className="mt-10 text-xs tracking-[0.2em] text-secondary uppercase">Empowering Pharmacy Education</p>
+          <p className="mt-10 text-xs tracking-[0.2em] text-secondary uppercase">{COLLEGE_NAME}</p>
         </div>
       </section>
     </div>

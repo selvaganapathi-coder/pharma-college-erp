@@ -8,10 +8,10 @@ import { useApp } from "@/lib/app-context";
 import { searchErp } from "@/lib/search";
 
 export function GlobalSearch() {
-  const { state } = useApp();
+  const { state, user } = useApp();
   const router = useRouter();
   const [q, setQ] = useState("");
-  const hits = useMemo(() => searchErp(state, q), [state, q]);
+  const hits = useMemo(() => (user ? searchErp(state, q, user.role) : []), [state, q, user]);
 
   return (
     <div className="relative min-w-0 flex-1">
@@ -19,7 +19,7 @@ export function GlobalSearch() {
       <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search students, staff, courses, notices…"
+        placeholder={user?.role === "staff" ? "Search your students, classes, notices…" : "Search students, staff, courses, notices…"}
         className="h-11 rounded-full border-border bg-[#f7f1e4] pl-9"
         aria-label="Search college records"
         aria-autocomplete="list"

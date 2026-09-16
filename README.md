@@ -1,6 +1,19 @@
-# GP Pharmacy College ERP
+# GP Pharmacy College
 
-College operations portal for **GP Pharmacy College**. Firebase Authentication is the source of truth for passwords. There is no demo login and no fake payment success.
+**College Management System** for GP Pharmacy College. *Learn • Practice • Lead*
+
+Firebase Authentication is the source of truth for passwords. There is no demo login and no fake payment success.
+
+This app has four portals:
+
+| Role | Portal |
+| --- | --- |
+| Admin | `/app` |
+| Staff | `/staff` |
+| Student | `/student` |
+| Parent | `/parent` |
+
+After sign-in, routing follows `users/{uid}.role`. The login tabs only describe the portal; they are not authorization.
 
 Application repo: [github.com/selvaganapathi-coder/pharma-college-erp](https://github.com/selvaganapathi-coder/pharma-college-erp)
 
@@ -36,7 +49,9 @@ Staff records include employment and professional fields, a profile page, and su
 
 Tick **Create student login** to provision a Firebase Authentication user. The password is sent only to Firebase Auth (via the server Identity Toolkit API) and is never written to the student Firestore document. The college profile is `users/{uid}` with `role = student` and `studentId` pointing at the student record.
 
-Student sessions load only that student's document and related fees, attendance, marks, and library checkouts. Changing a URL to another student id is blocked.
+Student sessions load only that student's document plus related fees, attendance, marks, timetable for their section, and library checkouts. Parent sessions load only the linked child (`childStudentId`, with optional `studentIds[]`). Staff sessions load timetable rows where `staffId` matches, then students in those sections. Changing `childStudentId` on the client cannot expand Firestore access; identity fields on `users/{uid}` are locked for self-updates.
+
+Publish `firestore.rules` from this repository so the new portal isolation is enforced in the cloud.
 
 ### Firebase (pharmacy-98684)
 

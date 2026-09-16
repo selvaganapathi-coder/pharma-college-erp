@@ -19,10 +19,10 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "GP Pharmacy College ERP",
-  description: "Student, staff, fees, library, and alerts for GP Pharmacy College.",
+  title: "GP Pharmacy College",
+  description: "College Management System for GP Pharmacy College. Learn • Practice • Lead.",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, title: "GP Pharmacy" },
+  appleWebApp: { capable: true, title: "GP Pharmacy College" },
 };
 
 export const viewport: Viewport = {
