@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
+import { toast } from "sonner";
 
 export default function MessagesPage() {
   const { state, save, remove, allowed, user } = useApp();
@@ -59,6 +60,7 @@ export default function MessagesPage() {
                 },
                 `Posted message "${title}".`,
               );
+              toast.success("Message posted.");
               setTitle("");
               setBody("");
             }}

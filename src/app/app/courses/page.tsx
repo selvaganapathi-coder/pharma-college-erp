@@ -7,6 +7,7 @@ import { DataTable } from "@/components/data-table";
 import { DepartmentSelect } from "@/components/linked-selects";
 import { DepartmentLabel } from "@/components/ref-label";
 import { FormDialog, FormSection } from "@/components/form-dialog";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,12 @@ export default function CoursesPage() {
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total courses" value={`${state.courses.length}`} />
+        <StatCard title="Programmes" value={`${state.courses.filter((c) => c.kind === "programme" || c.years >= 2).length}`} />
+        <StatCard title="Departments" value={`${state.departments.length}`} />
+        <StatCard title="Students" value={`${state.students.filter((s) => !s.deletedAt).length}`} />
+      </div>
       <DataTable
         rows={state.courses}
         empty="No courses yet. Add a programme or subject paper."

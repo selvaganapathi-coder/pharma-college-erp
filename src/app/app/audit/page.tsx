@@ -22,7 +22,7 @@ export default function AuditPage() {
           { key: "at", header: "When", cell: (r) => new Date(r.at).toLocaleString() },
           { key: "who", header: "Who", cell: (r) => r.actorName },
           { key: "action", header: "Action", cell: (r) => r.action },
-          { key: "entity", header: "Area", cell: (r) => `${r.entity} · ${r.entityId}` },
+          { key: "entity", header: "Area", cell: (r) => r.entity },
           { key: "details", header: "What changed", cell: (r) => r.details },
           {
             key: "net",

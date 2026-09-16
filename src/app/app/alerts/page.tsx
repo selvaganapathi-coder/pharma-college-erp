@@ -111,7 +111,7 @@ export default function AlertsPage() {
         <StatCard title="Created today" value={`${state.notices.filter((n) => n.createdAt.slice(0, 10) === today).length}`} />
       </div>
       {canWrite ? (
-        <div className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4">
+        <div className="mb-6 space-y-3 rounded-2xl bg-card p-4 erp-card">
           <div className="space-y-1">
             <Label htmlFor="alert-title">Title</Label>
             <Input id="alert-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
@@ -123,7 +123,7 @@ export default function AlertsPage() {
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label>Severity</Label>
-              <Select value={severity} onValueChange={pick((v) => setSeverity(v as AlertSeverity))}>
+              <Select value={severity} onValueChange={pick((v) => setSeverity(v as AlertSeverity))} items={{ INFO: "INFO", SUCCESS: "SUCCESS", WARNING: "WARNING", ERROR: "ERROR", URGENT: "URGENT" }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(["INFO", "SUCCESS", "WARNING", "ERROR", "URGENT"] as const).map((s) => (
@@ -134,7 +134,7 @@ export default function AlertsPage() {
             </div>
             <div className="space-y-1">
               <Label>Audience</Label>
-              <Select value={audience} onValueChange={pick(setAudience)}>
+              <Select value={audience} onValueChange={pick(setAudience)} items={{ All: "All", Students: "Students", Parents: "Parents", Staff: "Staff", Section: "One section", Student: "One student" }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All</SelectItem>

@@ -24,11 +24,12 @@ export default function LoginPage() {
   const [portal, setPortal] = useState<"office" | "student" | "parent">("office");
   const view = mode;
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("gp-login-email") ?? ""));
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [resetNote, setResetNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,7 +46,11 @@ export default function LoginPage() {
         : await login(email, password);
     setBusy(false);
     if (msg) setError(msg);
-    else router.replace("/app");
+    else {
+      if (remember) localStorage.setItem("gp-login-email", email.trim().toLowerCase());
+      else localStorage.removeItem("gp-login-email");
+      router.replace("/app");
+    }
   }
 
   return (
@@ -106,7 +111,7 @@ export default function LoginPage() {
             {view === "in" ? (
               <div className="flex items-center justify-between text-xs">
                 <label className="flex items-center gap-2 text-muted-foreground">
-                  <Checkbox defaultChecked /> Remember me
+                  <Checkbox checked={remember} onCheckedChange={(v) => setRemember(Boolean(v))} /> Remember me
                 </label>
                 <button
                   type="button"

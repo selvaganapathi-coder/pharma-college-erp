@@ -38,9 +38,14 @@ export default function StudentFilePage() {
         title="Student Profile"
         note={`${st.rollNo} · GP Pharmacy College`}
         action={
-          <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => router.push("/app/students")}>
-            Back
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => window.print()}>
+              Print
+            </Button>
+            <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => router.push("/app/students")}>
+              Back
+            </Button>
+          </div>
         }
       />
       <Card className="mb-6 border-0 erp-shadow ring-1 ring-border/80">

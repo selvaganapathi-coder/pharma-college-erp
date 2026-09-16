@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
+import { StatCard } from "@/components/stat-card";
 import { PhotoUpload } from "@/components/photo-upload";
 import { FormDialog, FormSection } from "@/components/form-dialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,7 @@ import type { Department } from "@/lib/types";
 
 export default function DepartmentsPage() {
   const { state, save, remove, allowed, upload } = useApp();
+  const router = useRouter();
   const canWrite = allowed("departments", "write");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Department | null>(null);
@@ -39,11 +42,19 @@ export default function DepartmentsPage() {
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Departments" value={`${state.departments.length}`} />
+        <StatCard title="Courses" value={`${state.courses.filter((c) => c.kind === "programme" || c.years >= 2).length}`} />
+        <StatCard title="Staff" value={`${state.staff.filter((t) => !t.deletedAt).length}`} />
+        <StatCard title="Students" value={`${state.students.filter((s) => !s.deletedAt).length}`} />
+      </div>
       <DataTable
         rows={state.departments}
         empty="No departments yet. Add the first faculty group."
+        mobileTitle={(r) => r.name}
         canWrite={canWrite}
         filter={(row, q) => !q || `${row.name} ${row.code} ${row.head}`.toLowerCase().includes(q)}
+        onOpen={(r) => router.push(`/app/departments/${r.id}`)}
         onEdit={(r) => {
           setForm(r);
           setOpen(true);

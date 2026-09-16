@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
+import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/lib/app-context";
@@ -51,6 +52,12 @@ export default function ReportsPage() {
           </Button>
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Students" value={`${state.students.filter((s) => !s.deletedAt).length}`} />
+        <StatCard title="Attendance rows" value={`${state.attendance.length}`} />
+        <StatCard title="Fee records" value={`${state.fees.filter((f) => !f.deletedAt).length}`} />
+        <StatCard title="Exams" value={`${state.exams.length}`} />
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>

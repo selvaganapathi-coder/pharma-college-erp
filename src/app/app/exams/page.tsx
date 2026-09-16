@@ -8,6 +8,7 @@ import { CourseSelect, SectionSelect } from "@/components/linked-selects";
 import { SubjectLabel } from "@/components/ref-label";
 import { Button } from "@/components/ui/button";
 import { FormDialog, FormSection } from "@/components/form-dialog";
+import { StatCard } from "@/components/stat-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
@@ -62,6 +63,19 @@ export default function ExamsPage() {
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Upcoming" value={`${state.exams.filter((e) => e.date >= new Date().toISOString().slice(0, 10)).length}`} />
+        <StatCard title="Completed" value={`${state.exams.filter((e) => e.date < new Date().toISOString().slice(0, 10)).length}`} />
+        <StatCard title="Locked" value={`${state.exams.filter((e) => e.locked).length}`} />
+        <StatCard
+          title="Average score"
+          value={
+            state.marks.length
+              ? `${Math.round(state.marks.reduce((s, m) => s + m.marks, 0) / state.marks.length)}`
+              : "—"
+          }
+        />
+      </div>
       <div className="mb-4 flex flex-wrap gap-2">
         {state.exams.map((e) => (
           <Button

@@ -57,10 +57,18 @@ export default function AttendancePage() {
         title="Attendance"
         note="Pick section, then subject paper, then date. Mark present, late, or absent. Parents and students only view."
       />
-      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="In this list" value={`${students.length}`} />
-        <StatCard title="Present (saved)" value={`${students.filter((st) => statusOf(st.id) === "present").length}`} />
-        <StatCard title="Absent / late" value={`${students.filter((st) => statusOf(st.id) !== "present").length}`} />
+        <StatCard title="Present" value={`${students.filter((st) => statusOf(st.id) === "present").length}`} />
+        <StatCard title="Late" value={`${students.filter((st) => statusOf(st.id) === "late").length}`} />
+        <StatCard
+          title="Attendance %"
+          value={
+            students.length
+              ? `${Math.round((students.filter((st) => statusOf(st.id) === "present").length / students.length) * 100)}%`
+              : "—"
+          }
+        />
       </div>
       <div className="mb-4 grid gap-3 md:grid-cols-3">
         <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />

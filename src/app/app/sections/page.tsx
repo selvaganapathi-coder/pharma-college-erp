@@ -8,6 +8,7 @@ import { DataTable } from "@/components/data-table";
 import { CourseSelect, StaffSelect } from "@/components/linked-selects";
 import { CourseLabel, DepartmentLabel } from "@/components/ref-label";
 import { FormDialog, FormSection } from "@/components/form-dialog";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,6 +65,12 @@ export default function SectionsPage() {
           ) : null
         }
       />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total sections" value={`${rows.length}`} />
+        <StatCard title="Active" value={`${rows.filter((r) => (r.status ?? "active") === "active").length}`} />
+        <StatCard title="Total students" value={`${state.students.filter((s) => !s.deletedAt).length}`} />
+        <StatCard title="Available capacity" value={`${Math.max(0, rows.reduce((s, r) => s + r.capacity, 0) - state.students.filter((s) => !s.deletedAt).length)}`} />
+      </div>
       <DataTable
         rows={rows}
         empty="No sections yet. Add a class section after a programme course exists."

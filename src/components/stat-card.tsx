@@ -16,30 +16,33 @@ export function StatCard({
   tone?: "gold" | "red" | "cream" | "maroon";
 }) {
   const iconWrap = {
-    gold: "bg-secondary/25 text-primary",
-    red: "bg-primary/10 text-primary",
+    gold: "bg-[#fff4cc] text-primary",
+    red: "bg-[#fde8e8] text-primary",
     cream: "bg-muted text-primary",
     maroon: "bg-primary text-secondary",
   }[tone];
   return (
-    <Card className="erp-shadow border-0 ring-1 ring-border/80">
+    <Card className="erp-card">
       <CardContent className="flex items-start justify-between gap-3 pt-5">
-        <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="mt-1 text-3xl font-semibold tracking-tight text-primary">{value}</p>
-          {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <p className="mt-1 text-[32px] leading-none font-semibold tracking-tight text-primary">{value}</p>
+          {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
         </div>
-        {icon ? <span className={cn("flex size-11 items-center justify-center rounded-2xl", iconWrap)}>{icon}</span> : null}
+        {icon ? <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-2xl", iconWrap)}>{icon}</span> : null}
       </CardContent>
     </Card>
   );
 }
 
-export function SectionCard({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+export function SectionCard({ title, action, children, className }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <Card className={cn("erp-shadow border-0 ring-1 ring-border/80", className)}>
+    <Card className={cn("erp-card", className)}>
       <CardContent className="pt-5">
-        <h2 className="mb-3 text-base font-semibold text-primary">{title}</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-primary">{title}</h2>
+          {action}
+        </div>
         {children}
       </CardContent>
     </Card>

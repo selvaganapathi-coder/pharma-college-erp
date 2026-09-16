@@ -12,36 +12,43 @@ import {
   GraduationCap,
   LayoutDashboard,
   Library,
+  Layers,
   LogOut,
   Menu,
   MessageSquare,
   Receipt,
   ScrollText,
-  Search,
   Settings,
   Shield,
   Users,
   Building2,
-  Layers,
   FileBarChart,
+  CalendarRange,
+  NotebookPen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BrandMark } from "@/components/brand-mark";
+import { GlobalSearch } from "@/components/global-search";
+import { NotificationCenter } from "@/components/notification-center";
 import { useApp } from "@/lib/app-context";
 import { can, roleLabel, type ModuleKey } from "@/lib/rbac";
-import { Badge } from "@/components/ui/badge";
+import { LoadingState } from "@/components/empty-state";
 
 const GROUPS: { title: string; items: { href: string; label: string; module: ModuleKey; icon: typeof LayoutDashboard }[] }[] = [
   {
+    title: "Main",
+    items: [{ href: "/app", label: "Dashboard", module: "departments", icon: LayoutDashboard }],
+  },
+  {
     title: "Academic",
     items: [
-      { href: "/app", label: "Dashboard", module: "departments", icon: LayoutDashboard },
       { href: "/app/students", label: "Students", module: "students", icon: GraduationCap },
       { href: "/app/staff", label: "Staff", module: "staff", icon: Users },
       { href: "/app/departments", label: "Departments", module: "departments", icon: Building2 },
       { href: "/app/courses", label: "Courses", module: "courses", icon: BookOpen },
+      { href: "/app/subjects", label: "Subjects", module: "courses", icon: NotebookPen },
+      { href: "/app/batches", label: "Batches", module: "sections", icon: CalendarRange },
       { href: "/app/sections", label: "Sections", module: "sections", icon: Layers },
       { href: "/app/timetable", label: "Timetable", module: "timetable", icon: CalendarDays },
       { href: "/app/attendance", label: "Attendance", module: "attendance", icon: ClipboardCheck },
@@ -64,11 +71,10 @@ const GROUPS: { title: string; items: { href: string; label: string; module: Mod
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { ready, user, logout, online, state, firebaseNote, syncStatus, lastSyncedAt, syncError } = useApp();
+  const { ready, user, logout, online, state, firebaseNote, syncStatus, lastSyncedAt, syncError, save } = useApp();
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
 
   useEffect(() => {
     if (ready && !user) router.replace("/");
@@ -82,15 +88,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     })).filter((group) => group.items.length);
   }, [user]);
 
-  const unread = state.notices.filter((n) => !(n.readBy ?? []).includes(user?.id ?? "")).length;
+  const unreadNotices = state.notices.filter((n) => !n.archived && !(n.readBy ?? []).includes(user?.id ?? ""));
+  const unread = unreadNotices.length;
 
   if (!ready || !user) {
-    return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading college portal…</div>;
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <LoadingState label="Loading college portal…" />
+      </div>
+    );
   }
 
   function renderNav(onClick?: () => void) {
     return (
-      <nav className="flex flex-col gap-5">
+      <nav className="flex flex-col gap-5" aria-label="College modules">
         {groups.map((group) => (
           <div key={group.title}>
             <p className="mb-2 px-3 text-[10px] font-semibold tracking-[0.22em] text-secondary/90 uppercase">{group.title}</p>
@@ -108,11 +119,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                         ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
                         : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-white"
                     }`}
+                    aria-current={active ? "page" : undefined}
                   >
                     <Icon className="size-4 shrink-0" />
                     {item.label}
                     {item.href === "/app/alerts" && unread > 0 ? (
-                      <Badge className="ml-auto h-5 bg-primary text-primary-foreground">{unread}</Badge>
+                      <span className="ml-auto rounded-full bg-white px-1.5 text-[10px] font-bold text-primary">{unread}</span>
                     ) : null}
                   </Link>
                 );
@@ -125,7 +137,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background md:grid md:grid-cols-[260px_1fr]">
+    <div className="min-h-screen bg-background md:grid md:grid-cols-[248px_1fr]">
       <aside className="sticky top-0 hidden h-screen flex-col bg-sidebar p-4 text-sidebar-foreground md:flex">
         <div className="mb-6 px-1">
           <BrandMark light />
@@ -142,9 +154,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-card/95 px-3 py-3 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/70 bg-white/95 px-3 py-3 backdrop-blur md:px-6">
           <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger render={<Button variant="outline" size="icon-sm" className="md:hidden" />}>
+            <SheetTrigger render={<Button variant="outline" size="icon-sm" className="md:hidden" aria-label="Open menu" />}>
               <Menu />
             </SheetTrigger>
             <SheetContent side="left" className="w-72 bg-sidebar text-sidebar-foreground">
@@ -153,39 +165,27 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <BrandMark light />
                 </SheetTitle>
               </SheetHeader>
-              <div className="px-2">{renderNav(() => setOpen(false))}</div>
+              <div className="px-2 pb-6">{renderNav(() => setOpen(false))}</div>
             </SheetContent>
           </Sheet>
-          <form
-            className="relative min-w-0 flex-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const next = q.trim();
-              router.push(next ? `/app/students?q=${encodeURIComponent(next)}` : "/app/students");
+          <GlobalSearch />
+          <span className="hidden max-w-[110px] truncate text-[11px] text-muted-foreground sm:inline" title={syncError ?? lastSyncedAt ?? syncStatus}>
+            {syncStatus === "synced" ? "Synced" : syncStatus === "syncing" ? "Syncing…" : syncStatus === "error" ? "Sync failed" : online ? "Online" : "Offline"}
+          </span>
+          <NotificationCenter
+            notices={unreadNotices.slice(0, 8)}
+            unread={unread}
+            onOpenAll={() => router.push("/app/alerts")}
+            onRead={async (notice) => {
+              await save("notices", { ...notice, readBy: [...new Set([...(notice.readBy ?? []), user.id])] }, `Read alert ${notice.title}.`);
             }}
-          >
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search students, staff, courses, notices…"
-              className="h-11 rounded-full border-border bg-muted/40 pl-9"
-              aria-label="Search college records"
-            />
-          </form>
-          <Badge variant="outline" className="hidden max-w-[120px] truncate sm:inline-flex" title={syncError ?? lastSyncedAt ?? syncStatus}>
-            {syncStatus === "synced" ? "Synced" : syncStatus === "syncing" ? "Syncing…" : syncStatus === "error" ? "Sync failed" : online ? "Cloud idle" : "Offline"}
-          </Badge>
-          <Link href="/app/alerts" className="relative flex size-10 items-center justify-center rounded-full border border-border bg-card">
-            <Bell className="size-4 text-primary" />
-            {unread > 0 ? <span className="absolute top-1 right-1 size-2 rounded-full bg-primary" /> : null}
-          </Link>
+          />
           <div className="hidden items-center gap-2 sm:flex">
             <span className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-secondary">
               {user.name.slice(0, 1).toUpperCase()}
             </span>
             <div className="hidden text-right text-xs lg:block">
-              <p className="font-semibold">{user.name}</p>
+              <p className="font-semibold">{user.name.split(" ")[0]}</p>
               <p className="text-muted-foreground">{roleLabel(user.role)}</p>
             </div>
           </div>
@@ -204,7 +204,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="p-4 md:p-7">
           {firebaseNote ? (
-            <p className="mb-4 rounded-2xl border border-border bg-muted/60 px-3 py-2 text-sm text-primary">{firebaseNote}</p>
+            <p className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{firebaseNote}</p>
           ) : null}
           {children}
         </main>

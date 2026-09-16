@@ -8,6 +8,7 @@ import { severityRank } from "@/components/alert-card";
 import { nextPlacementAfterDepartment, programmesForDepartment, sameBatch, validateStudentPlacement } from "@/lib/catalog";
 import { findTimetableConflicts, validateSlotTimes } from "@/lib/schedule";
 import { getCourseName, getDepartmentName, getSectionName, getStudentName } from "@/lib/references";
+import { searchErp } from "@/lib/search";
 import crypto from "crypto";
 
 const catalog = {
@@ -119,6 +120,10 @@ describe("reference labels", () => {
     expect(getSectionName(state, "s-a")).toContain("A");
     expect(getSectionName(state, "s-a")).not.toBe("s-a");
     expect(getStudentName(state, "st-1")).toBe("Priya S");
+  });
+  it("searches students and departments by name", () => {
+    expect(searchErp(state, "Priya")[0]?.title).toBe("Priya S");
+    expect(searchErp(state, "Pharmacy").some((h) => h.kind === "Department")).toBe(true);
   });
   it("uses a safe fallback for missing ids", () => {
     expect(getDepartmentName(state, "missing")).toBe("Unknown Department");

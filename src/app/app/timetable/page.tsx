@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Guard } from "@/components/guard";
-import { CourseSelect, SectionSelect, StaffSelect } from "@/components/linked-selects";
+import { CourseSelect, DepartmentSelect, SectionSelect, StaffSelect } from "@/components/linked-selects";
 import { FormDialog, FormSection, FieldError } from "@/components/form-dialog";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,13 +33,24 @@ export default function TimetablePage() {
     ? state.students.find((s) => s.id === sid)?.sectionId ?? state.sections[0]?.id
     : state.sections[0]?.id;
   const [sectionId, setSectionId] = useState(defaultSection ?? "");
+  const [deptId, setDeptId] = useState("");
+  const [courseFilter, setCourseFilter] = useState("");
   const [dayTab, setDayTab] = useState("Monday");
+  const [view, setView] = useState<"week" | "day">("week");
   const canWrite = allowed("timetable", "write") && !sid;
   const [edit, setEdit] = useState<TimetableSlot | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const filteredSections = useMemo(() => {
+    return state.sections.filter((s) => {
+      const course = state.courses.find((c) => c.id === s.courseId);
+      if (deptId && course?.departmentId !== deptId) return false;
+      if (courseFilter && s.courseId !== courseFilter) return false;
+      return true;
+    });
+  }, [state.sections, state.courses, deptId, courseFilter]);
   const slots = useMemo(() => state.timetable.filter((t) => t.sectionId === sectionId), [state.timetable, sectionId]);
   const section = state.sections.find((s) => s.id === sectionId);
   const programme = state.courses.find((c) => c.id === section?.courseId);
@@ -85,27 +97,58 @@ export default function TimetablePage() {
   return (
     <Guard module="timetable">
       <PageHeader
-        title="Timetable"
-        note="Pick a section, then add or edit class times. Conflicts for staff, room, and section are blocked before save."
+        title="Timetable Management"
+        note="Filter by section, then add or edit class times. Conflicts for staff, room, and section are blocked before save."
         action={
           canWrite ? (
             <Button className="min-h-11" onClick={() => openNew()} disabled={!sectionId}>
-              Add entry
+              Add Class
             </Button>
           ) : null
         }
       />
-      <div className="mb-4 max-w-xs">
-        <SectionSelect sections={state.sections} value={sectionId} onChange={setSectionId} />
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total classes" value={`${state.timetable.length}`} />
+        <StatCard title="Departments" value={`${new Set(state.timetable.map((t) => state.courses.find((c) => c.id === t.courseId)?.departmentId).filter(Boolean)).size}`} />
+        <StatCard title="Subjects" value={`${new Set(state.timetable.map((t) => t.courseId)).size}`} />
+        <StatCard title="Staff assigned" value={`${new Set(state.timetable.map((t) => t.staffId)).size}`} />
       </div>
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <DepartmentSelect
+          departments={state.departments}
+          value={deptId}
+          onChange={(id) => {
+            setDeptId(id);
+            setCourseFilter("");
+            setSectionId("");
+          }}
+        />
+        <CourseSelect
+          courses={state.courses}
+          departmentId={deptId || undefined}
+          kind="programme"
+          value={courseFilter}
+          onChange={(id) => {
+            setCourseFilter(id);
+            setSectionId("");
+          }}
+        />
+        <SectionSelect sections={filteredSections} courseId={courseFilter || undefined} value={sectionId} onChange={setSectionId} />
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant={view === "week" ? "default" : "outline"} className="min-h-10" onClick={() => setView("week")}>
+          Weekly
+        </Button>
+        <Button size="sm" variant={view === "day" ? "default" : "outline"} className="min-h-10" onClick={() => setView("day")}>
+          Daily
+        </Button>
         {DAYS.map((d) => (
-          <Button key={d} size="sm" variant={d === dayTab ? "default" : "outline"} className="min-h-10" onClick={() => setDayTab(d)}>
+          <Button key={d} size="sm" variant={d === dayTab ? "secondary" : "outline"} className="min-h-10" onClick={() => { setDayTab(d); setView("day"); }}>
             {d.slice(0, 3)}
           </Button>
         ))}
       </div>
-      <div className="mb-6 hidden overflow-x-auto rounded-2xl bg-card p-3 ring-1 ring-border/80 erp-shadow md:block">
+      <div className={`${view === "week" ? "mb-6 hidden overflow-x-auto rounded-2xl bg-card p-3 ring-1 ring-border/80 erp-shadow md:block" : "hidden"}`}>
         <table className="w-full min-w-[860px] text-sm text-primary">
           <thead>
             <tr>
@@ -164,7 +207,7 @@ export default function TimetablePage() {
           </tbody>
         </table>
       </div>
-      <div className="grid gap-3 md:hidden">
+      <div className={view === "day" ? "grid gap-3" : "grid gap-3 md:hidden"}>
         {slots
           .filter((s) => s.day === dayTab)
           .sort((a, b) => slotTimes(a).start.localeCompare(slotTimes(b).start))
