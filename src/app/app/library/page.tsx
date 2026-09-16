@@ -7,7 +7,7 @@ import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { PhotoUpload } from "@/components/photo-upload";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialog, FormSection } from "@/components/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
+import { toast } from "sonner";
 import type { Book } from "@/lib/types";
 
 export default function LibraryPage() {
@@ -151,106 +152,107 @@ export default function LibraryPage() {
           />
         </TabsContent>
       </Tabs>
-      <Dialog open={bookOpen} onOpenChange={setBookOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Book</DialogTitle>
-          </DialogHeader>
-          {form ? (
-            <div className="space-y-3">
+      <FormDialog
+        open={bookOpen}
+        onOpenChange={setBookOpen}
+        title={form && state.books.some((b) => b.id === form.id) ? "Edit Book" : "Add Book"}
+        description="Catalogue title with copies available for issue."
+        submitLabel="Save book"
+        onSubmit={async () => {
+          if (!form?.title) return;
+          const result = await save("books", form, `Saved book ${form.title}.`);
+          if (!result.ok) return;
+          toast.success("Book saved successfully.");
+          setBookOpen(false);
+        }}
+      >
+        {form ? (
+          <FormSection title="Catalogue">
+            <div className="sm:col-span-2">
               <PhotoUpload
                 label="Cover photo"
                 value={form.photoUrl}
                 onChange={(url) => setForm({ ...form, photoUrl: url })}
                 onFile={(file) => upload("books", form.id, file)}
               />
-              <div className="space-y-1">
-                <Label>Title</Label>
-                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Author</Label>
-                <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label>ISBN</Label>
-                  <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Copies</Label>
-                  <Input type="number" value={form.copies} onChange={(e) => setForm({ ...form, copies: Number(e.target.value) })} />
-                </div>
-              </div>
-              <Button
-              onClick={async () => {
-                  await save("books", form, `Saved book ${form.title}.`);
-                  setBookOpen(false);
-                }}
-              >
-                Save book
-              </Button>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={outOpen} onOpenChange={setOutOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Issue book</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Book</Label>
-              <Select
-                value={bookId}
-                onValueChange={pick(setBookId)}
-                items={Object.fromEntries(state.books.map((b) => [b.id, b.title]))}
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {(v: string | null) => state.books.find((b) => b.id === v)?.title ?? "Select book"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {state.books.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-1">
-              <StudentSelect
-                students={state.students.filter((s) => !s.deletedAt).map((s) => ({ id: s.id, name: s.name, rollNo: s.rollNo }))}
-                value={studentId}
-                onChange={setStudentId}
-              />
+              <Label>Title</Label>
+              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </div>
-            <Button
-              onClick={async () => {
-                const due = new Date();
-                due.setDate(due.getDate() + 14);
-                await save(
-                  "checkouts",
-                  {
-                    id: uid("ch"),
-                    bookId,
-                    studentId,
-                    issuedOn: new Date().toISOString().slice(0, 10),
-                    dueOn: due.toISOString().slice(0, 10),
-                  },
-                  `Issued ${state.books.find((b) => b.id === bookId)?.title ?? "book"} to ${state.students.find((s) => s.id === studentId)?.name ?? "student"}.`,
-                );
-                setOutOpen(false);
-              }}
+            <div className="space-y-1">
+              <Label>Author</Label>
+              <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>ISBN</Label>
+              <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Copies</Label>
+              <Input type="number" value={form.copies} onChange={(e) => setForm({ ...form, copies: Number(e.target.value) })} />
+            </div>
+          </FormSection>
+        ) : null}
+      </FormDialog>
+      <FormDialog
+        open={outOpen}
+        onOpenChange={setOutOpen}
+        title="Issue book"
+        description="Issue is recorded against the student name and admission number."
+        submitLabel="Issue for 14 days"
+        onSubmit={async () => {
+          if (!bookId || !studentId) {
+            toast.error("Select a book and a student.");
+            return;
+          }
+          const due = new Date();
+          due.setDate(due.getDate() + 14);
+          const result = await save(
+            "checkouts",
+            {
+              id: uid("ch"),
+              bookId,
+              studentId,
+              issuedOn: new Date().toISOString().slice(0, 10),
+              dueOn: due.toISOString().slice(0, 10),
+            },
+            `Issued ${state.books.find((b) => b.id === bookId)?.title ?? "book"} to ${state.students.find((s) => s.id === studentId)?.name ?? "student"}.`,
+          );
+          if (!result.ok) return;
+          toast.success("Book issued.");
+          setOutOpen(false);
+        }}
+      >
+        <FormSection title="Issue">
+          <div className="space-y-1 sm:col-span-2">
+            <Label>Book</Label>
+            <Select
+              value={bookId}
+              onValueChange={pick(setBookId)}
+              items={Object.fromEntries(state.books.map((b) => [b.id, b.title]))}
             >
-              Issue for 14 days
-            </Button>
+              <SelectTrigger>
+                <SelectValue>{(v: string | null) => state.books.find((b) => b.id === v)?.title ?? "Select book"}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {state.books.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="sm:col-span-2">
+            <StudentSelect
+              students={state.students.filter((s) => !s.deletedAt).map((s) => ({ id: s.id, name: s.name, rollNo: s.rollNo }))}
+              value={studentId}
+              onChange={setStudentId}
+            />
+          </div>
+        </FormSection>
+      </FormDialog>
     </Guard>
   );
 }

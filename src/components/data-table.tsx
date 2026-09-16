@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const PAGE = 25;
 
@@ -39,6 +40,7 @@ export function DataTable<T extends { id: string }>({
 }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
+  const [pendingDelete, setPendingDelete] = useState<T | null>(null);
   const shown = useMemo(() => rows.filter((row) => filter(row, q.trim().toLowerCase())), [rows, filter, q]);
   const pages = Math.max(1, Math.ceil(shown.length / PAGE));
   const slice = shown.slice(page * PAGE, page * PAGE + PAGE);
@@ -82,7 +84,13 @@ export function DataTable<T extends { id: string }>({
                     ))}
                     {onOpen || canWrite ? (
                       <TableCell>
-                        <RowActions row={row} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} canWrite={canWrite} />
+                        <RowActions
+                          row={row}
+                          onOpen={onOpen}
+                          onEdit={onEdit}
+                          onDelete={onDelete ? setPendingDelete : undefined}
+                          canWrite={canWrite}
+                        />
                       </TableCell>
                     ) : null}
                   </TableRow>
@@ -105,7 +113,13 @@ export function DataTable<T extends { id: string }>({
                     ))}
                 </dl>
                 <div className="mt-3">
-                  <RowActions row={row} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} canWrite={canWrite} />
+                  <RowActions
+                    row={row}
+                    onOpen={onOpen}
+                    onEdit={onEdit}
+                    onDelete={onDelete ? setPendingDelete : undefined}
+                    canWrite={canWrite}
+                  />
                 </div>
               </article>
             ))}
@@ -125,6 +139,17 @@ export function DataTable<T extends { id: string }>({
           </div>
         </>
       )}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Archive this record?"
+        message="The record will be archived and hidden from active lists. Cloud sync will apply the same change when you are online."
+        confirmLabel="Archive"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete && onDelete) onDelete(pendingDelete);
+          setPendingDelete(null);
+        }}
+      />
     </div>
   );
 }

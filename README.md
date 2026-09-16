@@ -30,7 +30,9 @@ npm run build
 
 ### Students
 
-Admit from **Students → Add student**. Department, course, batch, and section are linked dropdowns that show names, not document ids.
+Admit from **Students → Add student**. Department, course, batch, and section are linked dropdowns that show names, not document ids. Batch options come from section intake labels (for example `2026–2030`), not raw document ids.
+
+Staff records include employment and professional fields, a profile page, and subject assignments from the department subject list. Timetable entries can be edited with start/end times and reject overlapping staff, room, or section bookings.
 
 Tick **Create student login** to provision a Firebase Authentication user. The password is sent only to Firebase Auth (via the server Identity Toolkit API) and is never written to the student Firestore document. The college profile is `users/{uid}` with `role = student` and `studentId` pointing at the student record.
 

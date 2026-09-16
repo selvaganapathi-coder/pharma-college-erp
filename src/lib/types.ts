@@ -38,12 +38,17 @@ export type Course = {
 export type Section = {
   id: string;
   name: string;
+  code?: string;
   courseId: string;
   year: number;
   /** Intake / batch label such as 2026–2030. Falls back to year when empty. */
   batch?: string;
+  semester?: string;
+  academicYear?: string;
+  advisorId?: string;
   room: string;
   capacity: number;
+  status?: Status;
 };
 
 export type Student = {
@@ -75,14 +80,29 @@ export type Student = {
   deletedAt?: string;
 };
 
+export type StaffType = "teaching" | "non-teaching" | "administrative" | "support";
+
 export type Staff = {
   id: string;
   staffCode: string;
   name: string;
   email: string;
   phone: string;
+  altPhone?: string;
   title: string;
   qualification: string;
+  specialization?: string;
+  licenseNo?: string;
+  previousInstitution?: string;
+  experienceYears?: number;
+  staffType?: StaffType;
+  gender?: "Female" | "Male" | "Other";
+  dob?: string;
+  bloodGroup?: string;
+  address?: string;
+  city?: string;
+  stateName?: string;
+  pincode?: string;
   departmentId: string;
   courseIds: string[];
   joinedOn: string;
@@ -96,6 +116,8 @@ export type TimetableSlot = {
   sectionId: string;
   day: string;
   period: string;
+  startTime?: string;
+  endTime?: string;
   courseId: string;
   staffId: string;
   room: string;

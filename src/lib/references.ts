@@ -59,6 +59,22 @@ export function getSectionName(state: Pick<AppState, "sections" | "courses">, id
   return `${courseName} ${batchLabel(section)} — ${section.name}`;
 }
 
+export function getSectionShortName(state: Pick<AppState, "sections">, id?: string | null) {
+  if (!id) return FALLBACK.section;
+  return state.sections.find((s) => s.id === id)?.name ?? FALLBACK.section;
+}
+
+export function getBatchName(
+  state: Pick<AppState, "sections">,
+  idOrLabel?: string | null,
+  sectionId?: string | null,
+) {
+  if (idOrLabel && !looksLikeId(idOrLabel)) return idOrLabel;
+  const section = state.sections.find((s) => s.id === (sectionId || idOrLabel || ""));
+  if (section) return batchLabel(section);
+  return idOrLabel || "Unknown Batch";
+}
+
 export function getStudentName(state: Pick<AppState, "students">, id?: string | null) {
   if (!id) return FALLBACK.student;
   return state.students.find((s) => s.id === id)?.name ?? FALLBACK.student;
@@ -141,9 +157,11 @@ export function studentSearchText(state: AppState, student: AppState["students"]
     student.phone,
     student.parentName,
     student.batch,
+    getBatchName(state, student.batch, student.sectionId),
     getDepartmentName(state, student.departmentId),
     getCourseName(state, student.courseId),
     getSectionName(state, student.sectionId),
+    getSectionShortName(state, student.sectionId),
   ]
     .join(" ")
     .toLowerCase();

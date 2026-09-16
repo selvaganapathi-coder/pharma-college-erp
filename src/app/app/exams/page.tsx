@@ -7,11 +7,12 @@ import { DataTable } from "@/components/data-table";
 import { CourseSelect, SectionSelect } from "@/components/linked-selects";
 import { SubjectLabel } from "@/components/ref-label";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialog, FormSection } from "@/components/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
+import { toast } from "sonner";
 import type { Exam } from "@/lib/types";
 
 export default function ExamsPage() {
@@ -127,52 +128,42 @@ export default function ExamsPage() {
           { key: "pct", header: "%", cell: (r) => `${r.pct}%` },
         ]}
       />
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New exam</DialogTitle>
-          </DialogHeader>
-          {form ? (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Name</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <SectionSelect
-                sections={state.sections}
-                value={form.sectionId}
-                onChange={(id) => setForm({ ...form, sectionId: id })}
-              />
-              <CourseSelect
-                courses={state.courses}
-                kind="subject"
-                value={form.courseId}
-                onChange={(id) => setForm({ ...form, courseId: id })}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label>Date</Label>
-                  <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Max marks</Label>
-                  <Input type="number" value={form.maxMarks} onChange={(e) => setForm({ ...form, maxMarks: Number(e.target.value) })} />
-                </div>
-              </div>
-              <Button
-                disabled={!form.name}
-                onClick={async () => {
-                  await save("exams", form, `Created exam ${form.name}.`);
-                  setExamId(form.id);
-                  setOpen(false);
-                }}
-              >
-                Save exam
-              </Button>
+      <FormDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="New exam"
+        description="Marks are entered for students in the selected section."
+        submitLabel="Save exam"
+        onSubmit={async () => {
+          if (!form?.name) {
+            return;
+          }
+          const result = await save("exams", form, `Created exam ${form.name}.`);
+          if (!result.ok) return;
+          setExamId(form.id);
+          toast.success("Exam created successfully.");
+          setOpen(false);
+        }}
+      >
+        {form ? (
+          <FormSection title="Paper">
+            <div className="space-y-1 sm:col-span-2">
+              <Label>Name</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+            <SectionSelect sections={state.sections} value={form.sectionId} onChange={(id) => setForm({ ...form, sectionId: id })} />
+            <CourseSelect courses={state.courses} kind="subject" label="Subject" value={form.courseId} onChange={(id) => setForm({ ...form, courseId: id })} />
+            <div className="space-y-1">
+              <Label>Date</Label>
+              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Max marks</Label>
+              <Input type="number" value={form.maxMarks} onChange={(e) => setForm({ ...form, maxMarks: Number(e.target.value) })} />
+            </div>
+          </FormSection>
+        ) : null}
+      </FormDialog>
     </Guard>
   );
 }

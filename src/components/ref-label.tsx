@@ -26,8 +26,25 @@ export function DepartmentLabel({ id }: { id?: string | null }) {
 export function CourseLabel({ id }: { id?: string | null }) {
   return <RefLabel kind="course" id={id} />;
 }
-export function SectionLabel({ id }: { id?: string | null }) {
+export function SectionLabel({ id, short }: { id?: string | null; short?: boolean }) {
+  const { state, ready } = useApp();
+  if (short) {
+    if (!ready) return <span className="text-muted-foreground">Loading…</span>;
+    if (!id) return <span className="text-muted-foreground">Not assigned</span>;
+    const section = state.sections.find((s) => s.id === id);
+    if (!section) return <span className="text-muted-foreground">Unknown Section</span>;
+    return <span>{section.name}</span>;
+  }
   return <RefLabel kind="section" id={id} />;
+}
+
+export function BatchLabel({ label, sectionId }: { label?: string | null; sectionId?: string | null }) {
+  const { state, ready } = useApp();
+  if (!ready) return <span className="text-muted-foreground">Loading…</span>;
+  const section = state.sections.find((s) => s.id === sectionId);
+  const text = label?.trim() || (section ? `${section.batch || `Year ${section.year}`}` : "");
+  if (!text) return <span className="text-muted-foreground">Not assigned</span>;
+  return <span>{text}</span>;
 }
 export function StudentLabel({ id }: { id?: string | null }) {
   return <RefLabel kind="student" id={id} />;

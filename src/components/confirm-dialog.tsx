@@ -1,13 +1,14 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { FormDialog } from "@/components/form-dialog";
 
 export function ConfirmDialog({
   open,
   title,
   message,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  loading,
   onCancel,
   onConfirm,
 }: {
@@ -15,25 +16,25 @@ export function ConfirmDialog({
   title: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
+  loading?: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 }) {
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">{message}</p>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" className="min-h-11" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button className="min-h-11" onClick={onConfirm}>
-            {confirmLabel}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onOpenChange={(next) => !next && onCancel()}
+      title={title}
+      description={message}
+      size="sm"
+      saving={loading}
+      submitLabel={confirmLabel}
+      cancelLabel={cancelLabel}
+      onCancel={onCancel}
+      onSubmit={onConfirm}
+    >
+      <p className="text-sm text-muted-foreground">This action can be reversed later from archived records if the module supports restore.</p>
+    </FormDialog>
   );
 }

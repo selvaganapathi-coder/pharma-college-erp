@@ -3,15 +3,43 @@ import type { AppState, Course, Section, Student } from "./types";
 type FieldErrors = Record<string, string>;
 
 export function programmesForDepartment(courses: Course[], departmentId: string) {
-  if (!departmentId) return [];
+  if (!departmentId) return programmesForCollege(courses);
   const inDept = courses.filter((c) => c.departmentId === departmentId);
-  const programmes = inDept.filter((c) => c.kind === "programme");
+  const programmes = inDept.filter((c) => c.kind === "programme" || c.years >= 2);
   return programmes.length ? programmes : inDept;
+}
+
+export function programmesForCollege(courses: Course[]) {
+  const programmes = courses.filter((c) => c.kind === "programme" || c.years >= 2);
+  return programmes.length ? programmes : courses;
+}
+
+export function normalizeBatch(label?: string | null) {
+  return (label ?? "")
+    .trim()
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+export function displayBatch(label: string) {
+  const trimmed = label.trim();
+  if (/^\d{4}-\d{4}$/.test(trimmed.replace(/[\u2010-\u2015\u2212]/g, "-").replace(/\s/g, ""))) {
+    return trimmed.replace(/[\u2010-\u2015\u2212-]/g, "–").replace(/\s/g, "");
+  }
+  return trimmed;
+}
+
+export function sameBatch(a?: string | null, b?: string | null) {
+  const left = normalizeBatch(a);
+  const right = normalizeBatch(b);
+  return Boolean(left) && left === right;
 }
 
 export function batchLabel(section: Pick<Section, "batch" | "year">) {
   const batch = section.batch?.trim();
-  return batch || `Year ${section.year}`;
+  return batch ? displayBatch(batch) : `Year ${section.year}`;
 }
 
 export function batchesForCourse(sections: Section[], courseId: string) {
@@ -20,8 +48,9 @@ export function batchesForCourse(sections: Section[], courseId: string) {
   const out: { id: string; label: string }[] = [];
   for (const section of sections.filter((s) => s.courseId === courseId)) {
     const label = batchLabel(section);
-    if (seen.has(label)) continue;
-    seen.add(label);
+    const key = normalizeBatch(label);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
     out.push({ id: label, label });
   }
   return out;
@@ -29,7 +58,7 @@ export function batchesForCourse(sections: Section[], courseId: string) {
 
 export function sectionsForCourseBatch(sections: Section[], courseId: string, batch?: string) {
   if (!courseId) return [];
-  return sections.filter((s) => s.courseId === courseId && (!batch || batchLabel(s) === batch));
+  return sections.filter((s) => s.courseId === courseId && (!batch || sameBatch(batchLabel(s), batch)));
 }
 
 export function courseBelongsToDepartment(course: Course | undefined, departmentId: string) {
@@ -59,7 +88,7 @@ export function validateStudentPlacement(student: Partial<Student>, catalog: Cat
   else if (student.courseId && !sectionBelongsToCourse(section, student.courseId)) {
     e.sectionId = "Selected section does not belong to the selected course.";
   }
-  if (student.batch && section && batchLabel(section) !== student.batch) {
+  if (student.batch && section && !sameBatch(batchLabel(section), student.batch)) {
     e.batch = "Selected batch does not match the selected section.";
   }
   return e;
@@ -96,8 +125,13 @@ export function nextPlacementAfterBatch(catalog: CatalogSlice, courseId: string,
   const sections = sectionsForCourseBatch(catalog.sections, courseId, batch);
   const section = sections.length === 1 ? sections[0] : undefined;
   return {
-    batch,
+    batch: displayBatch(batch),
     sectionId: section?.id ?? "",
     year: section?.year ?? 1,
   };
+}
+
+export function matchBatchOption(options: { id: string; label: string }[], value?: string | null) {
+  if (!value) return "";
+  return options.find((o) => sameBatch(o.id, value) || sameBatch(o.label, value))?.id ?? value;
 }

@@ -4,7 +4,14 @@ import type { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { pick } from "@/lib/pick";
-import { batchLabel, batchesForCourse, programmesForDepartment, sectionsForCourseBatch } from "@/lib/catalog";
+import {
+  batchLabel,
+  batchesForCourse,
+  matchBatchOption,
+  programmesForCollege,
+  programmesForDepartment,
+  sectionsForCourseBatch,
+} from "@/lib/catalog";
 import { getSectionName } from "@/lib/references";
 import type { AppState, Course, Department, Section, Staff } from "@/lib/types";
 
@@ -106,7 +113,9 @@ export function CourseSelect({
 }) {
   const list = (() => {
     if (requireDepartment && !departmentId) return [];
-    if (kind === "programme" && departmentId) return programmesForDepartment(courses, departmentId);
+    if (kind === "programme") {
+      return departmentId ? programmesForDepartment(courses, departmentId) : programmesForCollege(courses);
+    }
     return courses.filter((c) => {
       if (departmentId && c.departmentId !== departmentId) return false;
       if (kind && c.kind !== kind) return false;
@@ -158,7 +167,7 @@ export function BatchSelect({
   return (
     <NamedSelect
       label="Batch"
-      value={value}
+      value={matchBatchOption(options, value)}
       onChange={onChange}
       loading={loading}
       disabled={!courseId}

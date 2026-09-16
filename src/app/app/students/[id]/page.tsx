@@ -59,7 +59,7 @@ export default function StudentFilePage() {
               <Badge variant={st.status === "active" ? "success" : "outline"}>{st.status === "active" ? "Active" : "Left"}</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              <CourseLabel id={st.courseId} /> · <SectionLabel id={st.sectionId} />
+              <CourseLabel id={st.courseId} /> · Section <SectionLabel id={st.sectionId} short />
             </p>
             <p className="text-xs text-muted-foreground">Admission No: {st.rollNo}</p>
           </div>
@@ -113,7 +113,7 @@ export default function StudentFilePage() {
           </Info>
           <Info title="Batch" value={st.batch || (section ? batchLabel(section) : "—")} />
           <Info title="Section">
-            <SectionLabel id={st.sectionId} />
+            <SectionLabel id={st.sectionId} short />
           </Info>
           <Info title="Year" value={String(st.year)} />
           <Info title="Department">

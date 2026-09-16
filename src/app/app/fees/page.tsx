@@ -9,7 +9,7 @@ import { StatCard } from "@/components/stat-card";
 import { CourseSelect } from "@/components/linked-selects";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialog, FormSection } from "@/components/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
@@ -207,60 +207,69 @@ export default function FeesPage() {
           },
         ]}
       />
-      <Dialog open={Boolean(receipt)} onOpenChange={(o) => !o && setReceipt(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Fee receipt</DialogTitle>
-          </DialogHeader>
-          {receipt ? (
-            <div id="receipt" className="space-y-2 text-sm">
-              <p className="text-lg font-bold">GP Pharmacy College</p>
-              <p>Receipt {receipt.receiptNo}</p>
-              <p>Student: {state.students.find((s) => s.id === receipt.studentId)?.name ?? "Unknown Student"}</p>
-              <p>Admission No: {state.students.find((s) => s.id === receipt.studentId)?.rollNo ?? "—"}</p>
-              <p>Bill: {receipt.term}</p>
-              <p>Amount: ₹{receipt.amount.toLocaleString("en-IN")}</p>
-              <p>Paid on: {receipt.paidAt} · {receipt.method}</p>
-              <p>Txn: {receipt.txnId}</p>
-              <Button className="mt-2 min-h-11" onClick={() => window.print()}>Print</Button>
+      <FormDialog
+        open={Boolean(receipt)}
+        onOpenChange={(o) => !o && setReceipt(null)}
+        title="Fee receipt"
+        description="Official receipt from GP Pharmacy College."
+        size="sm"
+        submitLabel="Print"
+        onSubmit={() => window.print()}
+      >
+        {receipt ? (
+          <div id="receipt" className="space-y-2 text-sm">
+            <p className="text-lg font-bold">GP Pharmacy College</p>
+            <p>Receipt {receipt.receiptNo}</p>
+            <p>Student: {state.students.find((s) => s.id === receipt.studentId)?.name ?? "Unknown Student"}</p>
+            <p>Admission No: {state.students.find((s) => s.id === receipt.studentId)?.rollNo ?? "—"}</p>
+            <p>Bill: {receipt.term}</p>
+            <p>Amount: ₹{receipt.amount.toLocaleString("en-IN")}</p>
+            <p>
+              Paid on: {receipt.paidAt} · {receipt.method}
+            </p>
+            <p>Txn: {receipt.txnId}</p>
+          </div>
+        ) : null}
+      </FormDialog>
+      <FormDialog
+        open={planOpen}
+        onOpenChange={setPlanOpen}
+        title="Fee plan"
+        description="Bills are raised only for students on the selected programme and year."
+        submitLabel="Save plan"
+        onSubmit={async () => {
+          if (!plan?.name || plan.amount < 1) {
+            toast.error("Plan name and amount are required.");
+            return;
+          }
+          const result = await save("feePlans", plan, `Saved fee plan ${plan.name}.`);
+          if (!result.ok) return;
+          toast.success("Fee plan saved successfully.");
+          setPlanOpen(false);
+        }}
+      >
+        {plan ? (
+          <FormSection title="Plan">
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="plan-name">Name</Label>
+              <Input id="plan-name" value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} />
             </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={planOpen} onOpenChange={setPlanOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Fee plan</DialogTitle>
-          </DialogHeader>
-          {plan ? (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label htmlFor="plan-name">Name</Label>
-                <Input id="plan-name" value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} />
-              </div>
-              <CourseSelect courses={state.courses} kind="programme" value={plan.courseId} onChange={(id) => setPlan({ ...plan, courseId: id })} />
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <Label>Year</Label>
-                  <Input type="number" value={plan.year} onChange={(e) => setPlan({ ...plan, year: Number(e.target.value) })} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Amount</Label>
-                  <Input type="number" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: Number(e.target.value) })} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Due</Label>
-                  <Input type="date" value={plan.dueDate} onChange={(e) => setPlan({ ...plan, dueDate: e.target.value })} />
-                </div>
-              </div>
-              <Button className="min-h-11" disabled={!plan.name || plan.amount < 1} onClick={async () => {
-                await save("feePlans", plan, `Saved fee plan ${plan.name}.`);
-                setPlanOpen(false);
-              }}>Save plan</Button>
+            <CourseSelect courses={state.courses} kind="programme" value={plan.courseId} onChange={(id) => setPlan({ ...plan, courseId: id })} />
+            <div className="space-y-1">
+              <Label>Year</Label>
+              <Input type="number" value={plan.year} onChange={(e) => setPlan({ ...plan, year: Number(e.target.value) })} />
             </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+            <div className="space-y-1">
+              <Label>Amount</Label>
+              <Input type="number" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: Number(e.target.value) })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Due</Label>
+              <Input type="date" value={plan.dueDate} onChange={(e) => setPlan({ ...plan, dueDate: e.target.value })} />
+            </div>
+          </FormSection>
+        ) : null}
+      </FormDialog>
     </Guard>
   );
 }

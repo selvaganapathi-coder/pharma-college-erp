@@ -34,14 +34,17 @@ export function validatePortalPassword(password: string, email: string) {
   return e;
 }
 
-export function validateStaff(t: Partial<Staff>): FieldErrors {
+export function validateStaff(t: Partial<Staff>, departments?: { id: string }[]): FieldErrors {
   const e: FieldErrors = {};
   if (!t.staffCode?.trim()) e.staffCode = "Employee ID is required.";
   if (!t.name?.trim()) e.name = "Staff name is required.";
   if (!t.departmentId) e.departmentId = "Department is required.";
+  else if (departments && !departments.some((d) => d.id === t.departmentId)) e.departmentId = "Selected department does not exist.";
   if (!t.title?.trim()) e.title = "Designation is required.";
   if (!t.phone?.trim() || !PHONE.test(t.phone.trim())) e.phone = "Enter a valid phone number.";
+  if (t.altPhone?.trim() && !PHONE.test(t.altPhone.trim())) e.altPhone = "Enter a valid alternate phone, or leave it blank.";
   if (!t.email?.trim() || !EMAIL.test(t.email.trim())) e.email = "Enter a valid email.";
+  if (t.pincode?.trim() && !/^\d{6}$/.test(t.pincode.trim())) e.pincode = "Pincode must be 6 digits.";
   return e;
 }
 

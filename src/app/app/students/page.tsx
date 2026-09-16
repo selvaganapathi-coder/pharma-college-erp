@@ -8,15 +8,15 @@ import { Guard } from "@/components/guard";
 import { DataTable } from "@/components/data-table";
 import { PhotoUpload } from "@/components/photo-upload";
 import { BatchSelect, CourseSelect, DepartmentSelect, SectionSelect } from "@/components/linked-selects";
-import { CourseLabel, DepartmentLabel, SectionLabel } from "@/components/ref-label";
+import { CourseLabel, DepartmentLabel, SectionLabel, BatchLabel } from "@/components/ref-label";
+import { FormDialog, FormSection } from "@/components/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApp } from "@/lib/app-context";
-import { batchLabel, nextPlacementAfterBatch, nextPlacementAfterCourse, nextPlacementAfterDepartment } from "@/lib/catalog";
+import { batchLabel, nextPlacementAfterBatch, nextPlacementAfterCourse, nextPlacementAfterDepartment, sameBatch } from "@/lib/catalog";
 import { studentSearchText } from "@/lib/references";
 import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
@@ -68,7 +68,7 @@ export default function StudentsPage() {
       allRows.filter((s) => {
         if (deptFilter && s.departmentId !== deptFilter) return false;
         if (courseFilter && s.courseId !== courseFilter) return false;
-        if (batchFilter && (s.batch || batchLabel(state.sections.find((sec) => sec.id === s.sectionId) ?? { batch: "", year: s.year })) !== batchFilter) return false;
+        if (batchFilter && !sameBatch(s.batch || batchLabel(state.sections.find((sec) => sec.id === s.sectionId) ?? { batch: "", year: s.year }), batchFilter)) return false;
         if (sectionFilter && s.sectionId !== sectionFilter) return false;
         return true;
       }),
@@ -115,7 +115,7 @@ export default function StudentsPage() {
     { id: "", label: "All sections" },
     ...state.sections
       .filter((s) => !courseFilter || s.courseId === courseFilter)
-      .filter((s) => !batchFilter || batchLabel(s) === batchFilter)
+      .filter((s) => !batchFilter || sameBatch(batchLabel(s), batchFilter))
       .map((s) => ({ id: s.id, label: s.name })),
   ];
 
@@ -182,47 +182,77 @@ export default function StudentsPage() {
           { key: "name", header: "Name", cell: (r) => r.name },
           { key: "dept", header: "Department", cell: (r) => <DepartmentLabel id={r.departmentId} /> },
           { key: "course", header: "Course", cell: (r) => <CourseLabel id={r.courseId} /> },
-          { key: "batch", header: "Batch", cell: (r) => r.batch || batchLabel(state.sections.find((s) => s.id === r.sectionId) ?? { batch: "", year: r.year }) },
-          { key: "sec", header: "Section", cell: (r) => <SectionLabel id={r.sectionId} /> },
+          { key: "batch", header: "Batch", cell: (r) => <BatchLabel label={r.batch} sectionId={r.sectionId} /> },
+          { key: "sec", header: "Section", cell: (r) => <SectionLabel id={r.sectionId} short /> },
           { key: "parent", header: "Parent", cell: (r) => r.parentName || r.parentPhone },
           { key: "status", header: "Status", cell: (r) => <Badge variant={r.status === "active" ? "success" : "outline"}>{r.status === "active" ? "Active" : "Left"}</Badge> },
         ]}
       />
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{isNew ? "New student" : "Edit student"}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <PhotoUpload
-              label="Student photo"
-              value={form.photoUrl}
-              onChange={(url) => setForm({ ...form, photoUrl: url })}
-              onFile={(file) => upload("students", form.id, file)}
-            />
-            <div className="space-y-1">
-              <Label>Admission number</Label>
-              <Input value={form.rollNo} onChange={(e) => setForm({ ...form, rollNo: e.target.value })} />
+      <FormDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={isNew ? "Add New Student" : "Edit Student"}
+        description={isNew ? "Create a student profile and optional portal accounts." : "Update the student profile. Academic selectors keep department, course, batch, and section in sync."}
+        size="lg"
+        saving={saving}
+        submitLabel={isNew ? "Create Student" : "Save Changes"}
+        onSubmit={async () => {
+          const section = state.sections.find((s) => s.id === form.sectionId);
+          const payload = { ...form, batch: section ? batchLabel(section) : form.batch };
+          const errors = validateStudent(payload, catalog);
+          const err = firstError(errors);
+          if (err) {
+            toast.error(err);
+            return;
+          }
+          setSaving(true);
+          try {
+            if (isNew || createLogin || createParentLogin) {
+              const note = await createStudent({
+                student: payload,
+                createLogin,
+                password: portalPassword,
+                createParentLogin,
+                parentPassword,
+              });
+              if (note) {
+                toast.error(note);
+                return;
+              }
+            } else {
+              const result = await save("students", payload, `Saved student ${payload.name} (${payload.rollNo}).`);
+              if (!result.ok) return;
+            }
+            toast.success(isNew ? "Student created successfully." : "Student updated successfully.");
+            setPortalPassword("");
+            setParentPassword("");
+            setOpen(false);
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        <div className="space-y-4">
+          <FormSection title="Personal Information">
+            <div className="sm:col-span-2">
+              <PhotoUpload
+                label="Student photo"
+                value={form.photoUrl}
+                onChange={(url) => setForm({ ...form, photoUrl: url })}
+                onFile={(file) => upload("students", form.id, file)}
+              />
             </div>
             <div className="space-y-1">
               <Label>Full name</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="space-y-1">
-              <Label>Email</Label>
-              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <Label>Phone</Label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-            <div className="space-y-1">
               <Label>Date of birth</Label>
               <Input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} />
             </div>
             <div className="space-y-1">
-              <Label>Blood group</Label>
-              <Input value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} />
+              <Label>Admission number</Label>
+              <Input value={form.rollNo} onChange={(e) => setForm({ ...form, rollNo: e.target.value })} />
             </div>
             <div className="space-y-1">
               <Label>Gender</Label>
@@ -236,6 +266,24 @@ export default function StudentsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1">
+              <Label>Email</Label>
+              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Phone</Label>
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Blood group</Label>
+              <Input value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label>Address</Label>
+              <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            </div>
+          </FormSection>
+          <FormSection title="Academic Information" description="Department filters course, course filters batch, batch filters section.">
             <DepartmentSelect
               departments={state.departments}
               value={form.departmentId}
@@ -257,7 +305,6 @@ export default function StudentsPage() {
             />
             <SectionSelect
               sections={state.sections}
-              courses={state.courses}
               courseId={form.courseId}
               batch={form.batch}
               value={form.sectionId}
@@ -267,28 +314,12 @@ export default function StudentsPage() {
               }}
             />
             <div className="space-y-1">
-              <Label>Year</Label>
+              <Label>Year of study</Label>
               <Input type="number" value={form.year} onChange={(e) => setForm({ ...form, year: Number(e.target.value) })} />
             </div>
             <div className="space-y-1">
               <Label>Admission date</Label>
               <Input type="date" value={form.admissionDate} onChange={(e) => setForm({ ...form, admissionDate: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <Label>Parent / guardian name</Label>
-              <Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <Label>Parent phone</Label>
-              <Input value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label>Parent email</Label>
-              <Input value={form.parentEmail} onChange={(e) => setForm({ ...form, parentEmail: e.target.value })} />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label>Address</Label>
-              <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </div>
             <div className="space-y-1">
               <Label>Bus route</Label>
@@ -322,7 +353,23 @@ export default function StudentsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="sm:col-span-2 space-y-3 rounded-xl border border-border p-3">
+          </FormSection>
+          <FormSection title="Parent / Guardian">
+            <div className="space-y-1">
+              <Label>Parent / guardian name</Label>
+              <Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Parent phone</Label>
+              <Input value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label>Parent email</Label>
+              <Input value={form.parentEmail} onChange={(e) => setForm({ ...form, parentEmail: e.target.value })} />
+            </div>
+          </FormSection>
+          <FormSection title="Portal logins">
+            <div className="sm:col-span-2 space-y-3">
               <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
                 <Checkbox checked={createLogin} onCheckedChange={(v) => setCreateLogin(Boolean(v))} />
                 Create student login
@@ -359,48 +406,9 @@ export default function StudentsPage() {
                 </div>
               ) : null}
             </div>
-          </div>
-          <Button
-            className="min-h-11"
-            disabled={saving}
-            onClick={async () => {
-              const errors = validateStudent(form, catalog);
-              const err = firstError(errors);
-              if (err) {
-                toast.error(err);
-                return;
-              }
-              setSaving(true);
-              try {
-                if (isNew || createLogin || createParentLogin) {
-                  const note = await createStudent({
-                    student: form,
-                    createLogin,
-                    password: portalPassword,
-                    createParentLogin,
-                    parentPassword,
-                  });
-                  if (note) {
-                    toast.error(note);
-                    return;
-                  }
-                } else {
-                  const result = await save("students", form, `Saved student ${form.name} (${form.rollNo}).`);
-                  if (!result.ok) return;
-                }
-                toast.success(isNew ? "Student created." : "Student updated.");
-                setPortalPassword("");
-                setParentPassword("");
-                setOpen(false);
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? "Saving…" : "Save student"}
-          </Button>
-        </DialogContent>
-      </Dialog>
+          </FormSection>
+        </div>
+      </FormDialog>
     </Guard>
   );
 }

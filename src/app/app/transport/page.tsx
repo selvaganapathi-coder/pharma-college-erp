@@ -7,11 +7,12 @@ import { PhotoUpload } from "@/components/photo-upload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialog, FormSection } from "@/components/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
+import { toast } from "sonner";
 import type { BusRoute } from "@/lib/types";
 
 export default function TransportPage() {
@@ -90,41 +91,53 @@ export default function TransportPage() {
           );
         })}
       </div>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Bus route</DialogTitle>
-          </DialogHeader>
-          {form ? (
-            <div className="space-y-3">
+      <FormDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={form && state.routes.some((r) => r.id === form.id) ? "Edit Bus Route" : "Add Bus Route"}
+        description="Vehicle, driver, and stop list for college transport."
+        submitLabel="Save route"
+        onSubmit={async () => {
+          if (!form?.name) return;
+          const result = await save("routes", form, `Saved route ${form.name}.`);
+          if (!result.ok) return;
+          toast.success("Route saved successfully.");
+          setOpen(false);
+        }}
+      >
+        {form ? (
+          <FormSection title="Route">
+            <div className="sm:col-span-2">
               <PhotoUpload
                 label="Vehicle photo"
                 value={form.photoUrl}
                 onChange={(url) => setForm({ ...form, photoUrl: url })}
                 onFile={(file) => upload("transport", form.id, file)}
               />
-              {(["name", "vehicleNo", "driver", "driverPhone", "stops"] as const).map((key) => (
-                <div key={key} className="space-y-1">
-                  <Label>{key === "name" ? "Route name" : key === "vehicleNo" ? "Vehicle number" : key === "driver" ? "Driver" : key === "driverPhone" ? "Driver phone" : "Stops"}</Label>
-                  <Input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-                </div>
-              ))}
-              <div className="space-y-1">
-                <Label>Seats</Label>
-                <Input type="number" value={form.seats} onChange={(e) => setForm({ ...form, seats: Number(e.target.value) })} />
-              </div>
-              <Button
-              onClick={async () => {
-                  await save("routes", form, `Saved route ${form.name}.`);
-                  setOpen(false);
-                }}
-              >
-                Save route
-              </Button>
             </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+            {(["name", "vehicleNo", "driver", "driverPhone", "stops"] as const).map((key) => (
+              <div key={key} className="space-y-1">
+                <Label>
+                  {key === "name"
+                    ? "Route name"
+                    : key === "vehicleNo"
+                      ? "Vehicle number"
+                      : key === "driver"
+                        ? "Driver"
+                        : key === "driverPhone"
+                          ? "Driver phone"
+                          : "Stops"}
+                </Label>
+                <Input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+              </div>
+            ))}
+            <div className="space-y-1">
+              <Label>Seats</Label>
+              <Input type="number" value={form.seats} onChange={(e) => setForm({ ...form, seats: Number(e.target.value) })} />
+            </div>
+          </FormSection>
+        ) : null}
+      </FormDialog>
     </Guard>
   );
 }

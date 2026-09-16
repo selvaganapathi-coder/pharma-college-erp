@@ -5,7 +5,8 @@ import { mergeCloud } from "@/lib/sync";
 import { EMPTY_STATE, type AppState } from "@/lib/types";
 import { verifyRazorpaySignature } from "@/lib/server/razorpay";
 import { severityRank } from "@/components/alert-card";
-import { nextPlacementAfterDepartment, programmesForDepartment, validateStudentPlacement } from "@/lib/catalog";
+import { nextPlacementAfterDepartment, programmesForDepartment, sameBatch, validateStudentPlacement } from "@/lib/catalog";
+import { findTimetableConflicts, validateSlotTimes } from "@/lib/schedule";
 import { getCourseName, getDepartmentName, getSectionName, getStudentName } from "@/lib/references";
 import crypto from "crypto";
 
@@ -53,6 +54,23 @@ describe("validation", () => {
 describe("catalog cascade", () => {
   it("lists programmes for a department by name relationship", () => {
     expect(programmesForDepartment(catalog.courses, "d-pharm").map((c) => c.name)).toEqual(["B.Pharm"]);
+  });
+  it("treats hyphen and en-dash batch labels as the same intake", () => {
+    expect(sameBatch("2026-2030", "2026–2030")).toBe(true);
+    expect(
+      firstError(
+        validateStudentPlacement(
+          { departmentId: "d-pharm", courseId: "c-bpharm", sectionId: "s-a", batch: "2026-2030" },
+          catalog,
+        ),
+      ),
+    ).toBeNull();
+  });
+  it("falls back to multi-year courses when kind is missing programme", () => {
+    const mixed = [
+      { id: "c-bpharm", code: "BPH", name: "B.Pharm", departmentId: "d-pharm", years: 4, credits: 160, kind: "subject" as const },
+    ];
+    expect(programmesForDepartment(mixed, "d-pharm").map((c) => c.name)).toEqual(["B.Pharm"]);
   });
   it("clears course when the department has more than one programme", () => {
     const extra = {
@@ -160,6 +178,43 @@ describe("razorpay signature", () => {
     const signature = crypto.createHmac("sha256", "testsecret").update(`${orderId}|${paymentId}`).digest("hex");
     expect(verifyRazorpaySignature(orderId, paymentId, signature)).toBe(true);
     expect(verifyRazorpaySignature(orderId, paymentId, "deadbeef")).toBe(false);
+  });
+});
+
+describe("timetable conflicts", () => {
+  it("rejects an end time that is not later than start", () => {
+    expect(validateSlotTimes("10:00", "09:00")).toMatch(/later/);
+  });
+  it("detects overlapping staff on the same day", () => {
+    const conflicts = findTimetableConflicts(
+      {
+        id: "tt-2",
+        sectionId: "s-b",
+        day: "Monday",
+        period: "10:00 AM",
+        startTime: "10:00",
+        endTime: "11:00",
+        courseId: "c-pharm",
+        staffId: "t-1",
+        room: "102",
+      },
+      [
+        {
+          id: "tt-1",
+          sectionId: "s-a",
+          day: "Monday",
+          period: "9:00 AM",
+          startTime: "09:30",
+          endTime: "10:30",
+          courseId: "c-pharm",
+          staffId: "t-1",
+          room: "101",
+        },
+      ],
+      [{ id: "t-1", staffCode: "STF001", name: "Dr. Priya Kumar", email: "p@x", phone: "12345678", title: "Professor", qualification: "", departmentId: "d-pharm", courseIds: [], joinedOn: "", status: "active" }],
+    );
+    expect(conflicts.some((c) => c.kind === "staff")).toBe(true);
+    expect(conflicts[0].message).toContain("Dr. Priya Kumar");
   });
 });
 
