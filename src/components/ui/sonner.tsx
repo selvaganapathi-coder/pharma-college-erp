@@ -20,7 +20,7 @@ export function Toaster(props: ToasterProps) {
       }}
       toastOptions={{
         classNames: {
-          toast: "cn-toast min-w-[280px] rounded-2xl p-4 shadow-lg",
+          toast: "cn-toast min-w-0 max-w-full rounded-2xl p-4 shadow-lg sm:min-w-[280px]",
           title: "font-bold tracking-wide",
           description: "opacity-95",
         },

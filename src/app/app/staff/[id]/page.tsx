@@ -66,7 +66,7 @@ export default function StaffFilePage() {
         </CardContent>
       </Card>
       <Tabs defaultValue="overview">
-        <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1 rounded-full bg-muted p-1">
+        <TabsList className="mb-4 flex h-auto w-full min-w-0 justify-start gap-1 overflow-x-auto rounded-full bg-muted p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="employment">Employment</TabsTrigger>

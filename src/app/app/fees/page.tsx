@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
 import type { Fee, FeePlan } from "@/lib/types";
+import { MobileRecordCard } from "@/components/responsive/mobile-record-card";
 
 declare global {
   interface Window {
@@ -168,6 +169,35 @@ export default function FeesPage() {
         emptyTitle="No fee bills"
         canWrite={canWrite}
         mobileTitle={(r) => r.term}
+        mobileCard={(r, actions) => {
+          const st = state.students.find((s) => s.id === r.studentId);
+          return (
+            <MobileRecordCard
+              title={st?.name ?? "Unknown Student"}
+              subtitle={r.term}
+              meta={st?.rollNo}
+              status={<Badge variant={r.status === "paid" ? "success" : "outline"}>{r.status === "paid" ? "Paid" : "Pending"}</Badge>}
+              rows={[
+                { label: "Amount", value: `₹${r.amount.toLocaleString("en-IN")}` },
+                { label: "Due", value: r.dueDate },
+              ]}
+              actions={
+                <div className="flex w-full flex-wrap gap-2">
+                  {r.status !== "paid" ? (
+                    <Button className="min-h-11 flex-1" disabled={busy} onClick={() => void startPay(r)}>
+                      Pay
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="min-h-11 flex-1" onClick={() => setReceipt(r)}>
+                      View details
+                    </Button>
+                  )}
+                  {actions}
+                </div>
+              }
+            />
+          );
+        }}
         filter={(row, q) => {
           const st = state.students.find((s) => s.id === row.studentId);
           return !q || `${st?.name} ${st?.rollNo} ${row.term}`.toLowerCase().includes(q);

@@ -99,14 +99,22 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground antialiased;
-  }
   html {
     @apply font-sans;
+    overflow-x: clip;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    overflow-x: clip;
+    max-width: 100%;
+  }
+  img, svg, video, canvas {
+    max-width: 100%;
+    height: auto;
   }
   h1, h2, h3, .font-heading {
     letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
   }
   :focus-visible {
     outline: 2px solid var(--ring);
@@ -144,6 +152,24 @@
     left: 12px !important;
     right: 12px !important;
     top: 12px !important;
+    width: auto !important;
+  }
+  [data-sonner-toaster] [data-sonner-toast] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+@media print {
+  html, body {
+    overflow: visible;
+  }
+  header,
+  aside,
+  [aria-label="Primary"],
+  [data-slot="sheet"],
+  .toaster {
+    display: none !important;
   }
 }
 .toaster [data-sonner-toast][data-type="success"] {

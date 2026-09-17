@@ -29,6 +29,8 @@ import {
   validateSlotTimes,
 } from "@/lib/schedule";
 import { getSectionShortName, getStaffName, getSubjectName } from "@/lib/references";
+import { DaySelector } from "@/components/responsive/day-selector";
+import { FilterSheet } from "@/components/responsive/filter-sheet";
 
 export default function TimetablePage() {
   const { state, save, remove, allowed } = useApp();
@@ -107,42 +109,55 @@ export default function TimetablePage() {
         <StatCard title="Subjects" value={`${new Set(state.timetable.map((t) => t.courseId)).size}`} />
         <StatCard title="Staff assigned" value={`${new Set(state.timetable.map((t) => t.staffId)).size}`} />
       </div>
-      <div className="mb-4 grid gap-3 md:grid-cols-3">
-        <DepartmentSelect
-          departments={state.departments}
-          value={deptId}
-          onChange={(id) => {
-            setDeptId(id);
+      <div className="mb-4 rounded-2xl bg-card p-4 ring-1 ring-border/80">
+        <FilterSheet
+          activeCount={[deptId, courseFilter, sectionId].filter(Boolean).length}
+          onReset={() => {
+            setDeptId("");
             setCourseFilter("");
             setSectionId("");
           }}
-        />
-        <CourseSelect
-          courses={state.courses}
-          departmentId={deptId || undefined}
-          kind="programme"
-          value={courseFilter}
-          onChange={(id) => {
-            setCourseFilter(id);
-            setSectionId("");
+        >
+          <DepartmentSelect
+            departments={state.departments}
+            value={deptId}
+            onChange={(id) => {
+              setDeptId(id);
+              setCourseFilter("");
+              setSectionId("");
+            }}
+          />
+          <CourseSelect
+            courses={state.courses}
+            departmentId={deptId || undefined}
+            kind="programme"
+            value={courseFilter}
+            onChange={(id) => {
+              setCourseFilter(id);
+              setSectionId("");
+            }}
+          />
+          <SectionSelect sections={filteredSections} courseId={courseFilter || undefined} value={sectionId} onChange={setSectionId} />
+        </FilterSheet>
+      </div>
+      <div className="mb-4 space-y-3">
+        <div className="hidden flex-wrap items-center gap-2 lg:flex">
+          <Button size="sm" variant={view === "week" ? "default" : "outline"} onClick={() => setView("week")}>
+            Weekly
+          </Button>
+          <Button size="sm" variant={view === "day" ? "default" : "outline"} onClick={() => setView("day")}>
+            Daily
+          </Button>
+        </div>
+        <DaySelector
+          value={dayTab}
+          onChange={(d) => {
+            setDayTab(d);
+            setView("day");
           }}
         />
-        <SectionSelect sections={filteredSections} courseId={courseFilter || undefined} value={sectionId} onChange={setSectionId} />
       </div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Button size="sm" variant={view === "week" ? "default" : "outline"} className="min-h-10" onClick={() => setView("week")}>
-          Weekly
-        </Button>
-        <Button size="sm" variant={view === "day" ? "default" : "outline"} className="min-h-10" onClick={() => setView("day")}>
-          Daily
-        </Button>
-        {DAYS.map((d) => (
-          <Button key={d} size="sm" variant={d === dayTab ? "secondary" : "outline"} className="min-h-10" onClick={() => { setDayTab(d); setView("day"); }}>
-            {d.slice(0, 3)}
-          </Button>
-        ))}
-      </div>
-      <div className={`${view === "week" ? "mb-6 hidden overflow-x-auto rounded-2xl bg-card p-3 ring-1 ring-border/80 erp-shadow md:block" : "hidden"}`}>
+      <div className={`${view === "week" ? "mb-6 hidden overflow-x-auto rounded-2xl bg-card p-3 ring-1 ring-border/80 erp-shadow lg:block" : "hidden"}`}>
         <div className="min-w-[960px]">
           <div className="grid grid-cols-[72px_repeat(6,minmax(0,1fr))]">
             <div />
@@ -203,7 +218,8 @@ export default function TimetablePage() {
           </div>
         </div>
       </div>
-      <div className={view === "day" ? "grid gap-3" : "grid gap-3 md:hidden"}>
+      <div className={view === "day" ? "grid gap-3" : "grid gap-3 lg:hidden"}>
+        <h2 className="text-lg font-semibold text-primary">{dayTab}</h2>
         {slots
           .filter((s) => s.day === dayTab)
           .sort((a, b) => slotTimes(a).start.localeCompare(slotTimes(b).start))
@@ -211,16 +227,16 @@ export default function TimetablePage() {
             const times = slotTimes(slot);
             return (
               <article key={slot.id} className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs font-medium text-muted-foreground">
                   {formatClock(times.start)} – {formatClock(times.end)}
                 </p>
-                <p className="font-semibold text-primary">{getSubjectName(state, slot.courseId)}</p>
-                <p className="text-sm">{getStaffName(state, slot.staffId)}</p>
+                <p className="mt-1 break-words font-semibold text-primary">{getSubjectName(state, slot.courseId)}</p>
+                <p className="break-words text-sm">{getStaffName(state, slot.staffId)}</p>
                 <p className="text-sm text-muted-foreground">
                   {slot.room || "No room"} · {getSectionShortName(state, slot.sectionId)}
                 </p>
                 {canWrite ? (
-                  <Button size="sm" className="mt-3 min-h-11" onClick={() => openEdit(slot)}>
+                  <Button size="sm" className="mt-3 min-h-11 w-full sm:w-auto" onClick={() => openEdit(slot)}>
                     Edit
                   </Button>
                 ) : null}
@@ -228,7 +244,9 @@ export default function TimetablePage() {
             );
           })}
         {slots.filter((s) => s.day === dayTab).length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No classes on {dayTab}.</p>
+          <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            There are no classes scheduled for this day.
+          </p>
         ) : null}
       </div>
       <FormDialog

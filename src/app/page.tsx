@@ -57,9 +57,9 @@ export default function LoginPage() {
   return (
     <div className="grid min-h-dvh bg-background md:grid-cols-[minmax(0,1fr)_minmax(220px,0.72fr)] lg:grid-cols-2">
       <section className="order-2 flex items-center justify-center px-4 py-8 md:order-1 md:py-12">
-        <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-6 shadow-[0_18px_50px_rgba(90,20,16,0.08)] sm:p-8">
+        <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-5 shadow-[0_18px_50px_rgba(90,20,16,0.08)] sm:p-8">
           <BrandMark size="lg" />
-          <h1 className="mt-7 text-3xl font-semibold tracking-tight text-primary">Welcome Back</h1>
+        <h1 className="mt-5 text-[22px] font-semibold tracking-tight text-primary sm:mt-7 sm:text-3xl">Welcome Back</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to your account</p>
           <div className="mt-5 grid grid-cols-3 rounded-full bg-muted p-1 text-[11px] font-semibold sm:text-xs">
             {PORTALS.map((item) => (
@@ -161,7 +161,7 @@ export default function LoginPage() {
           className="object-cover object-[center_22%] md:object-center"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#4a0f12]/70 via-[#4a0f12]/15 to-transparent md:bg-gradient-to-t md:from-[#4a0f12]/55 md:via-transparent" />
-        <div className="absolute right-4 bottom-4 left-4 hidden md:block">
+        <div className="absolute right-3 bottom-3 left-3 md:right-4 md:bottom-4 md:left-4">
           <p className="text-sm font-semibold text-white">{COLLEGE_NAME}</p>
           <p className="text-[11px] tracking-[0.18em] text-[#f0c419] uppercase">{COLLEGE_TAGLINE}</p>
         </div>

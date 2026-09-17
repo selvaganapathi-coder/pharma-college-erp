@@ -11,6 +11,7 @@ import { FormDialog, FormSection } from "@/components/form-dialog";
 import { StatCard } from "@/components/stat-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
 import { toast } from "sonner";
@@ -122,7 +123,7 @@ export default function ExamsPage() {
             cell: (r) =>
               canWrite && exam && !exam.locked ? (
                 <Input
-                  className="w-24"
+                  className="w-full min-h-11 sm:w-24"
                   type="number"
                   defaultValue={r.score}
                   onBlur={(e) => {
@@ -141,6 +142,27 @@ export default function ExamsPage() {
           { key: "grade", header: "Grade", cell: (r) => r.grade },
           { key: "pct", header: "%", cell: (r) => `${r.pct}%` },
         ]}
+        mobileTitle={(r) => r.name}
+        mobileCard={(r, actions) => (
+          <article className="rounded-xl border border-border bg-card p-4">
+            <p className="font-semibold text-primary">{r.name}</p>
+            <p className="text-sm text-muted-foreground">{exam?.name ?? "Exam"}</p>
+            <dl className="mt-2 space-y-1 text-sm">
+              <div className="flex justify-between"><dt className="text-muted-foreground">Maximum</dt><dd>{exam?.maxMarks ?? 30}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Marks</dt><dd>{
+                canWrite && exam && !exam.locked ? (
+                  <Input className="w-24 min-h-11" type="number" defaultValue={r.score} onBlur={(e) => {
+                    const value = Number(e.target.value);
+                    void save("marks", { id: r.markId ?? uid("m"), examId: exam.id, studentId: r.id, marks: value }, `Set marks for ${r.name} to ${value}.`);
+                  }} />
+                ) : r.score
+              }</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Grade</dt><dd>{r.grade}</dd></div>
+            </dl>
+            <Badge className="mt-2" variant="success">{exam?.locked ? "Published" : "Open"}</Badge>
+            <div className="mt-2">{actions}</div>
+          </article>
+        )}
       />
       <FormDialog
         open={open}

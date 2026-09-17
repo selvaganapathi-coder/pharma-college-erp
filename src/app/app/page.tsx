@@ -64,7 +64,7 @@ export default function DashboardPage() {
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.05fr_1fr_1fr]">
         <div className="erp-card relative min-h-[260px] overflow-hidden bg-gradient-to-br from-primary via-[#7a1520] to-[#3b0a0a] p-6 text-primary-foreground">
           <p className="text-xs font-semibold tracking-[0.2em] text-secondary uppercase">Campus</p>
-          <h2 className="mt-20 max-w-xs text-3xl font-semibold leading-tight">Shaping Future Pharmacists</h2>
+          <h2 className="mt-8 max-w-xs text-2xl font-semibold leading-tight sm:mt-20 sm:text-3xl">Shaping Future Pharmacists</h2>
           <p className="mt-2 text-sm text-primary-foreground/80">Knowledge · Research · Innovation · Service</p>
           <Button className="mt-5 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/90" onClick={() => router.push("/app/students")}>
             Our Mission
@@ -106,7 +106,7 @@ function Welcome({ name, note }: { name: string; note: string }) {
   return (
     <div className="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h1 className="text-[28px] font-semibold text-primary">Welcome back, {name.split(" ")[0]}!</h1>
+        <h1 className="text-[22px] font-semibold text-primary sm:text-[26px] lg:text-[28px]">Welcome back, {name.split(" ")[0]}!</h1>
         <p className="text-sm text-muted-foreground">{note}</p>
       </div>
       <div className="text-sm text-muted-foreground lg:text-right">

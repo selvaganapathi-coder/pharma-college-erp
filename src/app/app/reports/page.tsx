@@ -58,12 +58,12 @@ export default function ReportsPage() {
         <StatCard title="Fee records" value={`${state.fees.filter((f) => !f.deletedAt).length}`} />
         <StatCard title="Exams" value={`${state.exams.length}`} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Attendance mix</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={att} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} label>
@@ -80,7 +80,7 @@ export default function ReportsPage() {
           <CardHeader>
             <CardTitle>Fee collection (₹)</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={fees}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -96,7 +96,7 @@ export default function ReportsPage() {
           <CardHeader>
             <CardTitle>Attendance by section</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={bySection}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -112,7 +112,7 @@ export default function ReportsPage() {
           <CardHeader>
             <CardTitle>Average exam marks</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={examAvg}>
                 <CartesianGrid strokeDasharray="3 3" />

@@ -45,10 +45,9 @@ export default function LibraryPage() {
         note="Book catalogue with cover photo, copies, issue, return, and fine after due date."
         action={
           canWrite ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                
                 onClick={() => {
                   setForm({ id: uid("b"), isbn: "", title: "", author: "", copies: 1 });
                   setBookOpen(true);
@@ -56,9 +55,7 @@ export default function LibraryPage() {
               >
                 Add book
               </Button>
-              <Button onClick={() => setOutOpen(true)}>
-                Issue book
-              </Button>
+              <Button onClick={() => setOutOpen(true)}>Issue book</Button>
             </div>
           ) : null
         }
@@ -108,6 +105,7 @@ export default function LibraryPage() {
           <DataTable
             rows={checkouts}
             empty="No issues yet. Issue a book to a student."
+            mobileTitle={(r) => state.books.find((b) => b.id === r.bookId)?.title ?? "Book"}
             filter={(row, q) => {
               const b = state.books.find((x) => x.id === row.bookId);
               const s = state.students.find((x) => x.id === row.studentId);

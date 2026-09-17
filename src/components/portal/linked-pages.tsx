@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { BookLabel } from "@/components/ref-label";
 import { SectionCard } from "@/components/stat-card";
 import { DAYS } from "@/lib/types";
+import { DaySelector } from "@/components/responsive/day-selector";
+import { MobileRecordCard } from "@/components/responsive/mobile-record-card";
 import { useApp } from "@/lib/app-context";
 import { getStaffName, getSubjectName } from "@/lib/references";
 import { formatClock, slotTimes } from "@/lib/schedule";
@@ -86,38 +88,32 @@ export function LinkedProfilePage({ editable }: { editable: boolean }) {
 
 export function LinkedTimetablePage() {
   const { student, slots, state, user } = useLinkedStudent();
+  const [day, setDay] = useState(DAYS[new Date().getDay() === 0 ? 5 : Math.max(0, new Date().getDay() - 1)] ?? "Monday");
   if (!student) return <UnlinkedRecord kind={user?.role === "parent" ? "child" : "student"} />;
+  const rows = slots.filter((s) => s.day === day).sort((a, b) => slotTimes(a).start.localeCompare(slotTimes(b).start));
   return (
     <div>
-      <PageHeader title="Timetable" note={`Section ${student.sectionId ? getSubjectName(state, student.courseId) : ""} — only this section.`} />
-      <div className="grid gap-3">
-        {DAYS.map((day) => {
-          const rows = slots.filter((s) => s.day === day).sort((a, b) => slotTimes(a).start.localeCompare(slotTimes(b).start));
-          return (
-            <section key={day} className="erp-card p-4">
-              <h2 className="font-semibold text-primary">{day}</h2>
-              {rows.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">No classes.</p>
-              ) : (
-                <ul className="mt-2 space-y-2">
-                  {rows.map((slot) => {
-                    const t = slotTimes(slot);
-                    return (
-                      <li key={slot.id} className="rounded-xl bg-muted/60 px-3 py-2">
-                        <p className="text-xs text-muted-foreground">
-                          {formatClock(t.start)} – {formatClock(t.end)}
-                        </p>
-                        <p className="font-semibold">{getSubjectName(state, slot.courseId)}</p>
-                        <p className="text-sm">{getStaffName(state, slot.staffId)}</p>
-                        <p className="text-xs text-muted-foreground">{slot.room || "Room TBA"}</p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          );
-        })}
+      <PageHeader title="Timetable" note="Classes for this section, shown one day at a time on phones." />
+      <DaySelector value={day} onChange={setDay} />
+      <h2 className="mt-4 text-lg font-semibold text-primary">{day}</h2>
+      <div className="mt-3 grid gap-3">
+        {rows.length === 0 ? (
+          <EmptyState title="No timetable classes" description="There are no classes scheduled for this day." />
+        ) : (
+          rows.map((slot) => {
+            const t = slotTimes(slot);
+            return (
+              <article key={slot.id} className="erp-card p-4">
+                <p className="text-xs text-muted-foreground">
+                  {formatClock(t.start)} – {formatClock(t.end)}
+                </p>
+                <p className="mt-1 break-words font-semibold text-primary">{getSubjectName(state, slot.courseId)}</p>
+                <p className="break-words text-sm">{getStaffName(state, slot.staffId)}</p>
+                <p className="text-xs text-muted-foreground">{slot.room || "Room TBA"}</p>
+              </article>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -203,14 +199,16 @@ export function LinkedExamsPage() {
             rows
               .filter((r) => r.exam.date < today)
               .map((r) => (
-                <p key={r.exam.id} className="flex justify-between text-sm">
-                  <span>
-                    {r.exam.name} · {getSubjectName(state, r.exam.courseId)}
-                  </span>
-                  <span>
-                    {r.score == null ? "—" : `${r.score}/${r.max}`} {r.grade} {r.result}
-                  </span>
-                </p>
+                <article key={r.exam.id} className="mb-3 rounded-xl border border-border/80 p-3 last:mb-0">
+                  <p className="font-semibold text-primary">{getSubjectName(state, r.exam.courseId)}</p>
+                  <p className="text-sm text-muted-foreground">{r.exam.name}</p>
+                  <p className="mt-2 text-sm">Maximum: {r.max}</p>
+                  <p className="text-sm">Marks: {r.score == null ? "—" : r.score}</p>
+                  <p className="text-sm">Grade: {r.grade ?? "—"}</p>
+                  <Badge className="mt-2" variant={r.result === "Fail" ? "outline" : "success"}>
+                    {r.result ?? (r.exam.date < today ? "Published" : "Upcoming")}
+                  </Badge>
+                </article>
               ))
           )}
         </SectionCard>
@@ -238,6 +236,28 @@ export function LinkedFeesPage() {
             rows={fees}
             filter={(f, q) => f.term.toLowerCase().includes(q.toLowerCase())}
             empty="No fee bills."
+            mobileTitle={(f) => f.term}
+            mobileCard={(f, actions) => (
+              <MobileRecordCard
+                title={student.name}
+                subtitle={f.term}
+                status={<Badge variant={f.status === "paid" ? "success" : "outline"}>{f.status === "paid" ? "Paid" : "Pending"}</Badge>}
+                rows={[
+                  { label: "Amount", value: `₹${f.amount.toLocaleString("en-IN")}` },
+                  { label: "Due", value: f.dueDate },
+                ]}
+                actions={
+                  <div className="flex w-full flex-wrap gap-2">
+                    {f.status !== "paid" ? (
+                      <Button className="min-h-11 flex-1" onClick={() => void startFeePayment(f, authHeader)}>
+                        Pay
+                      </Button>
+                    ) : null}
+                    {actions}
+                  </div>
+                }
+              />
+            )}
             columns={[
               { key: "term", header: "Term", cell: (f) => f.term },
               { key: "amount", header: "Amount", cell: (f) => `₹${f.amount.toLocaleString("en-IN")}` },

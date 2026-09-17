@@ -31,7 +31,7 @@ export function UnlinkedRecord({ kind }: { kind: "student" | "staff" | "child" }
 export function ProfileCard({ student }: { student: Student }) {
   const { state } = useApp();
   return (
-    <div className="erp-card flex items-center gap-4 p-4">
+    <div className="erp-card flex flex-col items-center gap-4 p-4 text-center sm:flex-row sm:items-center sm:text-left">
       <Avatar className="size-16">
         {student.photoUrl ? <AvatarImage src={student.photoUrl} alt="" /> : null}
         <AvatarFallback>{student.name.slice(0, 1)}</AvatarFallback>
@@ -62,7 +62,7 @@ export function AttendanceSummary({ studentId }: { studentId: string }) {
         <ul className="mt-3 space-y-2 text-sm">
           {bySubject.map((s) => (
             <li key={s.courseId} className="flex justify-between gap-3">
-              <span>{s.name}</span>
+              <span className="min-w-0 break-words">{s.name}</span>
               <span className="font-semibold">{s.percent}%</span>
             </li>
           ))}

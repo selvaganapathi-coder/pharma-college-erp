@@ -44,7 +44,7 @@ export default function TransportPage() {
           ) : null
         }
       />
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         {routes.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground md:col-span-2">
             No bus routes yet. Add the first vehicle and driver.

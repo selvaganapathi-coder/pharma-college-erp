@@ -26,7 +26,7 @@ export function FormSection({
         <h3 className="text-sm font-semibold text-primary">{title}</h3>
         {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
     </section>
   );
 }
@@ -84,7 +84,7 @@ export function FormDialog({
     >
       <DialogContent
         className={cn(
-          "flex max-h-[min(92dvh,880px)] w-[calc(100vw-1.25rem)] flex-col gap-0 overflow-hidden bg-white p-0 text-left shadow-[0_24px_60px_-24px_rgba(80,20,24,0.35)] ring-1 ring-black/8 sm:w-full",
+          "flex max-h-[calc(100dvh-24px)] w-[calc(100vw-24px)] flex-col gap-0 overflow-hidden bg-white p-0 text-left shadow-[0_24px_60px_-24px_rgba(80,20,24,0.35)] ring-1 ring-black/8 sm:w-full sm:max-h-[min(92dvh,880px)]",
           width,
         )}
       >

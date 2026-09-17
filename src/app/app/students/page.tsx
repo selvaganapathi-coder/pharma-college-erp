@@ -22,6 +22,8 @@ import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
 import { firstError, validateStudent } from "@/lib/validation";
 import { Badge } from "@/components/ui/badge";
+import { FilterSheet } from "@/components/responsive/filter-sheet";
+import { MobileRecordCard } from "@/components/responsive/mobile-record-card";
 import { toast } from "sonner";
 import type { Student } from "@/lib/types";
 
@@ -138,12 +140,20 @@ export default function StudentsPage() {
       </div>
       {sid ? null : (
         <div className="mb-4 rounded-2xl bg-card p-4 ring-1 ring-border/80 erp-shadow">
-        <div className="grid gap-3 md:grid-cols-4">
-          <FilterSelect label="Department" value={deptFilter} options={deptOptions} onChange={(id) => { setDeptFilter(id); setCourseFilter(""); setBatchFilter(""); setSectionFilter(""); }} />
-          <FilterSelect label="Course" value={courseFilter} options={courseOptions} onChange={(id) => { setCourseFilter(id); setBatchFilter(""); setSectionFilter(""); }} />
-          <FilterSelect label="Batch" value={batchFilter} options={batchOptions} onChange={(id) => { setBatchFilter(id); setSectionFilter(""); }} />
-          <FilterSelect label="Section" value={sectionFilter} options={sectionOptions} onChange={setSectionFilter} />
-        </div>
+          <FilterSheet
+            activeCount={[deptFilter, courseFilter, batchFilter, sectionFilter].filter(Boolean).length}
+            onReset={() => {
+              setDeptFilter("");
+              setCourseFilter("");
+              setBatchFilter("");
+              setSectionFilter("");
+            }}
+          >
+            <FilterSelect label="Department" value={deptFilter} options={deptOptions} onChange={(id) => { setDeptFilter(id); setCourseFilter(""); setBatchFilter(""); setSectionFilter(""); }} />
+            <FilterSelect label="Course" value={courseFilter} options={courseOptions} onChange={(id) => { setCourseFilter(id); setBatchFilter(""); setSectionFilter(""); }} />
+            <FilterSelect label="Batch" value={batchFilter} options={batchOptions} onChange={(id) => { setBatchFilter(id); setSectionFilter(""); }} />
+            <FilterSelect label="Section" value={sectionFilter} options={sectionOptions} onChange={setSectionFilter} />
+          </FilterSheet>
         </div>
       )}
       <DataTable
@@ -151,6 +161,31 @@ export default function StudentsPage() {
         empty="There are no students matching the selected filters."
         searchPlaceholder="Search students…"
         mobileTitle={(r) => r.name}
+        mobileCard={(r, actions) => (
+          <MobileRecordCard
+            photo={
+              r.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={r.photoUrl} alt="" className="size-12 rounded-full object-cover" />
+              ) : (
+                <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-primary">{r.name.slice(0, 1)}</span>
+              )
+            }
+            title={r.name}
+            subtitle={
+              <>
+                <CourseLabel id={r.courseId} /> · Year {r.year}
+              </>
+            }
+            meta={r.rollNo}
+            status={<Badge variant={r.status === "active" ? "success" : "outline"}>{r.status === "active" ? "Active" : "Left"}</Badge>}
+            rows={[
+              { label: "Department", value: <DepartmentLabel id={r.departmentId} /> },
+              { label: "Section", value: <SectionLabel id={r.sectionId} short /> },
+            ]}
+            actions={actions}
+          />
+        )}
         canWrite={canWrite}
         filter={(row, q) => !q || studentSearchText(state, row).includes(q)}
         onOpen={(r) => router.push(`/app/students/${r.id}`)}

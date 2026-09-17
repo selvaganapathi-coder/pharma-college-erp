@@ -24,9 +24,9 @@ export function SearchTable<T>({
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Type to search…"
-        className="max-w-sm bg-card"
+        className="max-w-full bg-card sm:max-w-sm"
       />
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card lg:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted">
@@ -48,13 +48,33 @@ export function SearchTable<T>({
               shown.map((row, i) => (
                 <TableRow key={i}>
                   {columns.map((c) => (
-                    <TableCell key={c.key}>{c.cell(row)}</TableCell>
+                    <TableCell key={c.key} className="max-w-[16rem] break-words">
+                      {c.cell(row)}
+                    </TableCell>
                   ))}
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
+      </div>
+      <div className="grid gap-3 lg:hidden">
+        {shown.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{empty}</p>
+        ) : (
+          shown.map((row, i) => (
+            <article key={i} className="rounded-xl border border-border bg-card p-4">
+              <dl className="space-y-1 text-sm">
+                {columns.map((c) => (
+                  <div key={c.key} className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">{c.header}</dt>
+                    <dd className="min-w-0 text-right break-words">{c.cell(row)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </article>
+          ))
+        )}
       </div>
     </div>
   );

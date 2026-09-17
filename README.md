@@ -15,6 +15,8 @@ This app has four portals:
 
 After sign-in, routing follows `users/{uid}.role`. The login tabs only describe the portal; they are not authorization.
 
+The UI is a single Next.js app with a mobile-first layout: drawer navigation below the `lg` breakpoint, role-specific bottom navigation, record cards instead of wide tables on phones, and a day selector for timetables.
+
 Application repo: [github.com/selvaganapathi-coder/pharma-college-erp](https://github.com/selvaganapathi-coder/pharma-college-erp)
 
 ## Run

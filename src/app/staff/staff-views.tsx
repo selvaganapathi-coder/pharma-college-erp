@@ -13,11 +13,12 @@ import { UnlinkedRecord } from "@/components/portal/summaries";
 import { useApp } from "@/lib/app-context";
 import { staffTeaching } from "@/lib/scope";
 import { getSectionShortName, getStudentName, getSubjectName } from "@/lib/references";
-import { DAYS } from "@/lib/types";
+import { DaySelector } from "@/components/responsive/day-selector";
+import { DAYS, type Attendance } from "@/lib/types";
 import { formatClock, slotTimes } from "@/lib/schedule";
 import { getMyNotices, upcomingExams } from "@/lib/repositories";
 import { uid } from "@/lib/store";
-import type { Attendance } from "@/lib/types";
+import { staffTypeLabel, staffTypeOf } from "@/lib/staff";
 
 function useMine() {
   const { user, state } = useApp();
@@ -55,14 +56,35 @@ export function StaffDashboard() {
               {today.map((slot) => {
                 const t = slotTimes(slot);
                 return (
-                  <li key={slot.id} className="text-sm">
-                    <span className="font-semibold">{formatClock(t.start)} – {formatClock(t.end)}</span> · {getSubjectName(state, slot.courseId)} · {getSectionShortName(state, slot.sectionId)} · {slot.room || "Room TBA"}
+                  <li key={slot.id} className="rounded-xl bg-muted/50 p-3 text-sm">
+                    <p className="font-semibold">{getSubjectName(state, slot.courseId)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatClock(t.start)} – {formatClock(t.end)} · {getSectionShortName(state, slot.sectionId)} · {slot.room || "Room TBA"}
+                    </p>
                   </li>
                 );
               })}
             </ul>
           )}
         </SectionCard>
+        <SectionCard title="Quick actions">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Link href="/staff/attendance" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">
+              Take attendance
+            </Link>
+            <Link href="/staff/exams" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium">
+              Enter marks
+            </Link>
+            <Link href="/staff/students" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium">
+              View students
+            </Link>
+            <Link href="/staff/timetable" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium">
+              Timetable
+            </Link>
+          </div>
+        </SectionCard>
+      </div>
+      <div className="mt-4">
         <SectionCard title="Important notices">
           {notices.length === 0 ? <p className="text-sm text-muted-foreground">No notices.</p> : notices.map((n) => <AlertCard key={n.id} notice={n} compact />)}
         </SectionCard>
@@ -96,29 +118,39 @@ export function StaffClassesPage() {
 
 export function StaffTimetablePage() {
   const { me, slots, state } = useMine();
+  const [day, setDay] = useState(DAYS[new Date().getDay() === 0 ? 5 : Math.max(0, new Date().getDay() - 1)] ?? "Monday");
   if (!me) return <UnlinkedRecord kind="staff" />;
+  const rows = slots.filter((s) => s.day === day).sort((a, b) => slotTimes(a).start.localeCompare(slotTimes(b).start));
   return (
     <div>
       <PageHeader title="My timetable" note="Your assigned periods. The office maintains the master timetable." />
       {slots.length === 0 ? (
         <EmptyState title="No timetable yet" description="Assigned classes will list here by day and start time." />
       ) : (
-        DAYS.map((day) => {
-          const rows = slots.filter((s) => s.day === day).sort((a, b) => slotTimes(a).start.localeCompare(slotTimes(b).start));
-          return (
-            <section key={day} className="mb-3 erp-card p-4">
-              <h2 className="font-semibold">{day}</h2>
-              {rows.length === 0 ? <p className="text-sm text-muted-foreground">Free</p> : rows.map((slot) => {
+        <>
+          <DaySelector value={day} onChange={setDay} />
+          <h2 className="mt-4 text-lg font-semibold text-primary">{day}</h2>
+          <div className="mt-3 grid gap-3">
+            {rows.length === 0 ? (
+              <EmptyState title="No timetable classes" description="There are no classes scheduled for this day." />
+            ) : (
+              rows.map((slot) => {
                 const t = slotTimes(slot);
                 return (
-                  <p key={slot.id} className="text-sm">
-                    {formatClock(t.start)} – {formatClock(t.end)} · {getSubjectName(state, slot.courseId)} · {getSectionShortName(state, slot.sectionId)}
-                  </p>
+                  <article key={slot.id} className="erp-card p-4">
+                    <p className="text-xs text-muted-foreground">
+                      {formatClock(t.start)} – {formatClock(t.end)}
+                    </p>
+                    <p className="mt-1 font-semibold text-primary">{getSubjectName(state, slot.courseId)}</p>
+                    <p className="text-sm">
+                      {getSectionShortName(state, slot.sectionId)} · {slot.room || "Room TBA"}
+                    </p>
+                  </article>
                 );
-              })}
-            </section>
-          );
-        })
+              })
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -179,7 +211,7 @@ export function StaffAttendancePage() {
         <EmptyState title="No classes to mark" description="Attendance opens after you have timetable assignments." />
       ) : (
         <>
-          <div className="mb-4 grid gap-3 md:grid-cols-3">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm">
               Section
               <select className="mt-1 h-11 w-full rounded-xl border border-border bg-card px-3" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
@@ -248,10 +280,10 @@ export function StaffExamsPage() {
             {rows.map((st) => {
               const mark = state.marks.find((m) => m.examId === exam.id && m.studentId === st.id);
               return (
-                <li key={st.id} className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
-                  <span className="text-sm">{st.name}</span>
+                <li key={st.id} className="flex flex-col gap-2 rounded-xl border border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="min-w-0 break-words text-sm">{st.name}</span>
                   <Input
-                    className="w-24"
+                    className="w-full min-h-11 sm:w-28"
                     type="number"
                     defaultValue={mark?.marks ?? ""}
                     disabled={exam.locked}
@@ -314,9 +346,28 @@ export function StaffProfilePage() {
         <p className="text-sm">{me.title} · {me.staffCode}</p>
         <p className="text-sm">{me.email}</p>
         <p className="text-sm">{me.phone}</p>
-        <p className="text-sm">{me.qualification}</p>
-        <p className="mt-2 text-xs text-muted-foreground">Department and subject assignments cannot be changed from this portal.</p>
       </SectionCard>
+      <div className="mt-3 grid gap-3">
+        <SectionCard title="Professional Information">
+          <p className="text-sm">Designation: {me.title}</p>
+          <p className="text-sm">Specialization: {me.specialization || "—"}</p>
+          <p className="text-sm">Experience: {me.experienceYears ?? 0} years</p>
+        </SectionCard>
+        <SectionCard title="Employment Information">
+          <p className="text-sm">Joined: {me.joinedOn || "—"}</p>
+          <p className="text-sm">Staff type: {staffTypeLabel(staffTypeOf(me))}</p>
+          <p className="text-sm">Status: {me.status}</p>
+        </SectionCard>
+        <SectionCard title="Academic Qualifications">
+          <p className="text-sm">{me.qualification || "—"}</p>
+          <p className="text-sm">License: {me.licenseNo || "—"}</p>
+        </SectionCard>
+        <SectionCard title="Contact Information">
+          <p className="break-all text-sm">{me.email}</p>
+          <p className="text-sm">{me.phone}</p>
+          <p className="text-sm">{me.altPhone || "—"}</p>
+        </SectionCard>
+      </div>
     </div>
   );
 }

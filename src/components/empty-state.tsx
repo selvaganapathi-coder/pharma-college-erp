@@ -13,7 +13,7 @@ export function EmptyState({
   onAction?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-card px-4 py-12 text-center">
+    <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center sm:py-12">
       <Inbox className="mx-auto size-8 text-primary" aria-hidden />
       <h2 className="mt-3 text-lg font-semibold text-primary">{title}</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
@@ -31,7 +31,7 @@ export function LoadingState({ label = "Loading records…" }: { label?: string 
     <div role="status" aria-live="polite" className="space-y-2">
       <span className="sr-only">{label}</span>
       {[1, 2, 3].map((i) => (
-        <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+        <div key={i} className="h-20 animate-pulse rounded-xl bg-muted sm:h-16" />
       ))}
     </div>
   );

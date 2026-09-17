@@ -26,7 +26,7 @@ export function StatCard({
       <CardContent className="flex items-start justify-between gap-3 pt-5">
         <div className="min-w-0">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="mt-1 text-[32px] leading-none font-semibold tracking-tight text-primary">{value}</p>
+          <p className="mt-1 break-words text-[26px] leading-none font-semibold tracking-tight text-primary sm:text-[32px]">{value}</p>
           {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
         </div>
         {icon ? <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-2xl", iconWrap)}>{icon}</span> : null}
@@ -39,8 +39,8 @@ export function SectionCard({ title, action, children, className }: { title: str
   return (
     <Card className={cn("erp-card", className)}>
       <CardContent className="pt-5">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-primary">{title}</h2>
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <h2 className="text-lg font-semibold text-primary sm:text-base">{title}</h2>
           {action}
         </div>
         {children}

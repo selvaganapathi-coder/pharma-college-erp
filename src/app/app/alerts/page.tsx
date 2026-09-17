@@ -168,7 +168,7 @@ export default function AlertsPage() {
           </Button>
         </div>
       ) : null}
-      <div className="mb-4 grid gap-3 md:grid-cols-3">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search alerts" className="min-h-11" aria-label="Search alerts" />
         <Select value={sevFilter} onValueChange={pick(setSevFilter)}>
           <SelectTrigger className="min-h-11"><SelectValue placeholder="Severity" /></SelectTrigger>

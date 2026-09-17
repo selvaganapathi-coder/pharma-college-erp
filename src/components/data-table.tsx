@@ -20,6 +20,7 @@ export function DataTable<T extends { id: string }>({
   onOpen,
   canWrite,
   mobileTitle,
+  mobileCard,
   searchPlaceholder = "Search records…",
   hideSearch,
   toolbar,
@@ -34,6 +35,7 @@ export function DataTable<T extends { id: string }>({
   onOpen?: (row: T) => void;
   canWrite?: boolean;
   mobileTitle?: (row: T) => string;
+  mobileCard?: (row: T, actions: ReactNode) => ReactNode;
   searchPlaceholder?: string;
   hideSearch?: boolean;
   toolbar?: ReactNode;
@@ -55,7 +57,7 @@ export function DataTable<T extends { id: string }>({
             setPage(0);
           }}
           placeholder={searchPlaceholder}
-          className="max-w-sm min-h-11 rounded-full bg-card"
+          className="max-w-full min-h-11 rounded-full bg-card sm:max-w-sm"
           aria-label="Search records"
         />
       )}
@@ -64,7 +66,7 @@ export function DataTable<T extends { id: string }>({
         <EmptyState title={emptyTitle ?? "No records"} description={empty} />
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-2xl border-0 bg-card ring-1 ring-border/80 erp-shadow md:block">
+          <div className="hidden overflow-x-auto rounded-2xl border-0 bg-card ring-1 ring-border/80 erp-shadow lg:block">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/70">
@@ -80,7 +82,9 @@ export function DataTable<T extends { id: string }>({
                 {slice.map((row) => (
                   <TableRow key={row.id}>
                     {columns.map((c) => (
-                      <TableCell key={c.key}>{c.cell(row)}</TableCell>
+                      <TableCell key={c.key} className="max-w-[16rem] break-words">
+                        {c.cell(row)}
+                      </TableCell>
                     ))}
                     {onOpen || canWrite ? (
                       <TableCell>
@@ -98,41 +102,45 @@ export function DataTable<T extends { id: string }>({
               </TableBody>
             </Table>
           </div>
-          <div className="grid gap-3 md:hidden">
-            {slice.map((row) => (
-              <article key={row.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
-                {mobileTitle ? <h3 className="font-semibold text-primary">{mobileTitle(row)}</h3> : null}
-                <dl className="mt-2 space-y-1 text-sm">
-                  {columns
-                    .filter((c) => !c.hideOnMobile)
-                    .map((c) => (
-                      <div key={c.key} className="flex justify-between gap-3">
-                        <dt className="text-muted-foreground">{c.header}</dt>
-                        <dd className="text-right">{c.cell(row)}</dd>
-                      </div>
-                    ))}
-                </dl>
-                <div className="mt-3">
-                  <RowActions
-                    row={row}
-                    onOpen={onOpen}
-                    onEdit={onEdit}
-                    onDelete={onDelete ? setPendingDelete : undefined}
-                    canWrite={canWrite}
-                  />
-                </div>
-              </article>
-            ))}
+          <div className="grid gap-3 lg:hidden">
+            {slice.map((row) => {
+              const actions = (
+                <RowActions
+                  row={row}
+                  onOpen={onOpen}
+                  onEdit={onEdit}
+                  onDelete={onDelete ? setPendingDelete : undefined}
+                  canWrite={canWrite}
+                />
+              );
+              if (mobileCard) return <div key={row.id}>{mobileCard(row, actions)}</div>;
+              return (
+                <article key={row.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                  {mobileTitle ? <h3 className="break-words font-semibold text-primary">{mobileTitle(row)}</h3> : null}
+                  <dl className="mt-2 space-y-1 text-sm">
+                    {columns
+                      .filter((c) => !c.hideOnMobile)
+                      .map((c) => (
+                        <div key={c.key} className="flex justify-between gap-3">
+                          <dt className="shrink-0 text-muted-foreground">{c.header}</dt>
+                          <dd className="min-w-0 text-right break-words">{c.cell(row)}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                  <div className="mt-3">{actions}</div>
+                </article>
+              );
+            })}
           </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <p>
               {shown.length} record(s) · page {page + 1} of {pages}
             </p>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="min-h-11" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+              <Button size="sm" variant="outline" className="min-h-11 flex-1 sm:flex-none" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
                 Previous
               </Button>
-              <Button size="sm" variant="outline" className="min-h-11" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)}>
+              <Button size="sm" variant="outline" className="min-h-11 flex-1 sm:flex-none" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)}>
                 Next
               </Button>
             </div>

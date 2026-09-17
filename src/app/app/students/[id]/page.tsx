@@ -49,7 +49,7 @@ export default function StudentFilePage() {
         }
       />
       <Card className="mb-6 border-0 erp-shadow ring-1 ring-border/80">
-        <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center">
+        <CardContent className="flex flex-col items-center gap-4 pt-6 text-center sm:flex-row sm:items-center sm:text-left">
           <div className="size-24 overflow-hidden rounded-full border-4 border-secondary bg-muted">
             {st.photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -60,7 +60,7 @@ export default function StudentFilePage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-semibold text-primary">{st.name}</h2>
+              <h2 className="text-xl font-semibold text-primary sm:text-2xl">{st.name}</h2>
               <Badge variant={st.status === "active" ? "success" : "outline"}>{st.status === "active" ? "Active" : "Left"}</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -93,7 +93,7 @@ export default function StudentFilePage() {
         <Info title="Library" value={`${books.filter((b) => !b.returnedOn).length} books out`} />
       </div>
       <Tabs defaultValue="personal">
-        <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1 rounded-full bg-muted p-1">
+        <TabsList className="mb-4 flex h-auto w-full min-w-0 justify-start gap-1 overflow-x-auto rounded-full bg-muted p-1">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="academic">Academic</TabsTrigger>
           <TabsTrigger value="parent">Parent</TabsTrigger>

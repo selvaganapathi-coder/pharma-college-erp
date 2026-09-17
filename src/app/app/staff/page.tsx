@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { firstError, validateStaff } from "@/lib/validation";
 import type { Staff, StaffType, Status } from "@/lib/types";
 import { STAFF_TYPES, staffTypeLabel, staffTypeOf } from "@/lib/staff";
+import { MobileRecordCard } from "@/components/responsive/mobile-record-card";
 
 function blankStaff(code: string, departmentId: string): Staff {
   return {
@@ -92,6 +93,27 @@ export default function StaffPage() {
         rows={rows}
         empty="No staff yet. Add the first teacher or office record."
         mobileTitle={(r) => r.name}
+        mobileCard={(r, actions) => (
+          <MobileRecordCard
+            photo={
+              r.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={r.photoUrl} alt="" className="size-12 rounded-full object-cover" />
+              ) : (
+                <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-primary">{r.name.slice(0, 1)}</span>
+              )
+            }
+            title={r.name}
+            subtitle={r.specialization || r.title}
+            meta={`Staff ID: ${r.staffCode}`}
+            status={<Badge variant={r.status === "active" ? "success" : "outline"}>{r.status === "active" ? "Active" : "Left"}</Badge>}
+            rows={[
+              { label: "Role", value: staffTypeLabel(staffTypeOf(r)) },
+              { label: "Department", value: <DepartmentLabel id={r.departmentId} /> },
+            ]}
+            actions={actions}
+          />
+        )}
         canWrite={canWrite}
         filter={(row, q) =>
           !q ||

@@ -117,12 +117,20 @@ export const PARENT_NAV: NavGroup[] = [
   },
 ];
 
+export const ADMIN_BOTTOM: NavItem[] = [
+  { href: "/app", label: "Home", icon: LayoutDashboard },
+  { href: "/app/students", label: "Students", icon: GraduationCap },
+  { href: "/app/timetable", label: "Timetable", icon: CalendarDays },
+  { href: "/app/fees", label: "Fees", icon: Receipt },
+  { href: "/app/alerts", label: "More", icon: Bell },
+];
+
 export const STUDENT_BOTTOM: NavItem[] = [
   { href: "/student", label: "Home", icon: LayoutDashboard },
   { href: "/student/timetable", label: "Timetable", icon: CalendarDays },
-  { href: "/student/attendance", label: "Attendance", icon: ClipboardCheck },
+  { href: "/student/attendance", label: "Attend.", icon: ClipboardCheck },
   { href: "/student/exams", label: "Results", icon: ScrollText },
-  { href: "/student/profile", label: "Profile", icon: UserRound },
+  { href: "/student/notices", label: "More", icon: Bell },
 ];
 
 export const PARENT_BOTTOM: NavItem[] = [

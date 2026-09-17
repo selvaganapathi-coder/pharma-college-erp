@@ -1,13 +1,13 @@
 "use client";
 
 import { PortalGuard, PortalShell } from "@/components/portal/portal-shell";
-import { ADMIN_NAV } from "@/lib/nav";
+import { ADMIN_BOTTOM, ADMIN_NAV } from "@/lib/nav";
 import type { ReactNode } from "react";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <PortalGuard portal="admin">
-      <PortalShell portal="admin" groups={ADMIN_NAV} search>
+      <PortalShell portal="admin" groups={ADMIN_NAV} search bottomNav={ADMIN_BOTTOM}>
         {children}
       </PortalShell>
     </PortalGuard>
