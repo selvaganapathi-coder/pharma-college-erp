@@ -17,9 +17,8 @@ export function GlobalSearch() {
   const placeholder =
     user?.role === "staff" ? "Search your students, classes, notices…" : "Search students, staff, courses, notices…";
 
-  function Results() {
-    if (q.trim().length < 2) return null;
-    return (
+  const resultsList =
+    q.trim().length < 2 ? null : (
       <ul className="absolute z-40 mt-2 max-h-80 w-full overflow-auto rounded-2xl bg-white p-2 shadow-xl ring-1 ring-black/8">
         {hits.length === 0 ? (
           <li className="px-3 py-4 text-sm text-muted-foreground">No matching records.</li>
@@ -44,7 +43,6 @@ export function GlobalSearch() {
         )}
       </ul>
     );
-  }
 
   return (
     <div className="flex min-w-0 flex-1 items-center justify-end lg:block">
@@ -58,7 +56,7 @@ export function GlobalSearch() {
           aria-label="Search college records"
           aria-autocomplete="list"
         />
-        <Results />
+        {resultsList}
       </div>
       <Button
         type="button"
