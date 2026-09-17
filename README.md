@@ -37,8 +37,8 @@ npm run build
 
 ### First administrator
 
-1. Sign in if an admin already exists.
-2. Create the first admin only when Firebase `meta/setup` does not exist.
+1. Sign in on `/` if an administrator already exists. The login page has no public registration.
+2. Only while Firebase `meta/setup` does not exist, open `/setup` to create the first administrator. After that lock is written, `/setup` redirects to sign-in.
 3. Publish `firestore.rules` and `storage.rules` from this repo.
 
 ### Students

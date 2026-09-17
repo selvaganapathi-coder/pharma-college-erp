@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { accessDeniedMessage, loginPortalMatchesRole, portalForRole, portalHome } from "@/lib/portals";
 import { normalizeTimetableSlot, findTimetableConflicts, slotTimes } from "@/lib/schedule";
@@ -28,6 +29,13 @@ describe("portals", () => {
     expect(portalHome("student")).toBe("/student");
     expect(portalHome("parent")).toBe("/parent");
     expect(portalForRole("admin")).toBe("admin");
+  });
+  it("does not expose public registration on the login page", () => {
+    const src = readFileSync(new URL("../../app/page.tsx", import.meta.url), "utf8");
+    expect(src).not.toMatch(/Create Account|create account|Sign up|Don't have an account|registerAdmin/i);
+    expect(src).toContain("Welcome Back");
+    expect(src).toContain("Sign in to your account");
+    expect(src).toContain("/images/login/pharmacy-campus.jpg");
   });
   it("rejects a student using the office login tab", () => {
     expect(loginPortalMatchesRole("office", "student")).toBe(false);
