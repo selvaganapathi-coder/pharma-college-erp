@@ -73,4 +73,12 @@ describe("setup lock in rules", () => {
     expect(rules).toMatch(/match \/meta\/setup[\s\S]*allow list, create, update, delete: if false;/);
     expect(rules).not.toMatch(/request\.resource\.data\.role == 'admin'/);
   });
+
+  it("lets a signed-in student get their own course and section", () => {
+    const rules = readFileSync(new URL("../../../firestore.rules", import.meta.url), "utf8");
+    expect(rules).toMatch(/match \/courses\/\{id\}[\s\S]*?allow get: if signedIn\(\);/);
+    expect(rules).toMatch(/match \/sections\/\{id\}[\s\S]*?allow get: if signedIn\(\);/);
+    expect(rules).not.toMatch(/match \/courses\/\{id\}[\s\S]*?allow list: if true/);
+    expect(rules).not.toMatch(/match \/sections\/\{id\}[\s\S]*?allow list: if true/);
+  });
 });

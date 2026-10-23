@@ -486,18 +486,12 @@ export function listenAll(
   if (scope.role === "student" || scope.role === "parent") {
     const sid = scope.studentId;
     if (!sid) return () => undefined;
-    unsubs.push(
-      onSnapshot(
-        doc(fb.db, "students", sid),
-        (snap) => {
-          const row = snap.exists() ? [stripSecrets({ id: snap.id, ...snap.data() })] : [];
-          onChange("students", row as AppState["students"]);
-        },
-        (err) => onError(err.message),
-      ),
-    );
-    const sectionId = scope.sectionId;
-    if (sectionId) {
+    let closed = false;
+    let boundSection = "";
+    // Course and section lists are office-only. Students may get their own documents by id.
+    const bindSection = (sectionId: string) => {
+      if (!sectionId || boundSection === sectionId) return;
+      boundSection = sectionId;
       unsubs.push(
         listenQuery(
           query(collection(fb.db, "timetable"), where("sectionId", "==", sectionId)),
@@ -518,7 +512,33 @@ export function listenAll(
           (err) => onError(err.message),
         ),
       );
-    }
+    };
+    unsubs.push(
+      onSnapshot(
+        doc(fb.db, "students", sid),
+        (snap) => {
+          const row = snap.exists() ? (stripSecrets({ id: snap.id, ...snap.data() }) as Student) : null;
+          onChange("students", (row ? [row] : []) as AppState["students"]);
+          if (!row || closed) return;
+          if (row.sectionId) bindSection(row.sectionId);
+          void (async () => {
+            try {
+              const [course, section] = await Promise.all([
+                row.courseId ? fetchDoc<Course>("courses", row.courseId) : Promise.resolve(null),
+                row.sectionId ? fetchDoc<Section>("sections", row.sectionId) : Promise.resolve(null),
+              ]);
+              if (closed) return;
+              if (course) onChange("courses", [course] as AppState["courses"]);
+              if (section) onChange("sections", [section] as AppState["sections"]);
+            } catch (err) {
+              if (!closed) onError(err instanceof Error ? err.message : "Could not load the course or section.");
+            }
+          })();
+        },
+        (err) => onError(err.message),
+      ),
+    );
+    if (scope.sectionId) bindSection(scope.sectionId);
     for (const key of ["fees", "attendance", "marks", "checkouts"] as const) {
       unsubs.push(listenQuery(query(collection(fb.db, key), where("studentId", "==", sid)), key, onChange, onError));
     }
@@ -533,7 +553,10 @@ export function listenAll(
       ),
     );
     unsubs.push(listenQuery(collection(fb.db, "books"), "books", onChange, onError));
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      closed = true;
+      unsubs.forEach((u) => u());
+    };
   }
 
   if (scope.role === "staff" && scope.staffId) {
