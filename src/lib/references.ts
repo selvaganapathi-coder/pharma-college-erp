@@ -38,6 +38,11 @@ export function getDepartmentName(state: Pick<AppState, "departments">, id?: str
   return state.departments.find((d) => d.id === id)?.name ?? FALLBACK.department;
 }
 
+/** While a catalog get is in flight, keep the unknown fallback off the screen. */
+export function catalogText(resolved: string, pending: boolean, missing: string) {
+  return pending && resolved === missing ? "…" : resolved;
+}
+
 export function getCourseName(state: Pick<AppState, "courses">, id?: string | null) {
   if (!id) return FALLBACK.course;
   const course = state.courses.find((c) => c.id === id);

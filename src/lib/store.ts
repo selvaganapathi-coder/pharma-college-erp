@@ -460,6 +460,7 @@ export function listenAll(
   onChange: (key: CollectionKey, rows: AppState[CollectionKey]) => void,
   onError: (message: string) => void,
   scope?: Scope,
+  onCatalog?: (phase: "loading" | "ready") => void,
 ) {
   const fb = getFirebase();
   if (!fb) return () => undefined;
@@ -519,8 +520,16 @@ export function listenAll(
         (snap) => {
           const row = snap.exists() ? (stripSecrets({ id: snap.id, ...snap.data() }) as Student) : null;
           onChange("students", (row ? [row] : []) as AppState["students"]);
-          if (!row || closed) return;
+          if (!row || closed) {
+            onCatalog?.("ready");
+            return;
+          }
           if (row.sectionId) bindSection(row.sectionId);
+          if (!row.courseId && !row.sectionId) {
+            onCatalog?.("ready");
+            return;
+          }
+          onCatalog?.("loading");
           void (async () => {
             try {
               const [course, section] = await Promise.all([
@@ -528,10 +537,14 @@ export function listenAll(
                 row.sectionId ? fetchDoc<Section>("sections", row.sectionId) : Promise.resolve(null),
               ]);
               if (closed) return;
-              if (course) onChange("courses", [course] as AppState["courses"]);
-              if (section) onChange("sections", [section] as AppState["sections"]);
+              onChange("courses", (course ? [course] : []) as AppState["courses"]);
+              onChange("sections", (section ? [section] : []) as AppState["sections"]);
+              onCatalog?.("ready");
             } catch (err) {
-              if (!closed) onError(err instanceof Error ? err.message : "Could not load the course or section.");
+              if (!closed) {
+                onError(err instanceof Error ? err.message : "Could not load the course or section.");
+                onCatalog?.("ready");
+              }
             }
           })();
         },

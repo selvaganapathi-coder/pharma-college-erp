@@ -7,7 +7,7 @@ import { verifyRazorpaySignature } from "@/lib/server/razorpay";
 import { severityRank } from "@/components/alert-card";
 import { nextPlacementAfterDepartment, programmesForDepartment, sameBatch, validateStudentPlacement } from "@/lib/catalog";
 import { findTimetableConflicts, validateSlotTimes } from "@/lib/schedule";
-import { getCourseName, getDepartmentName, getSectionName, getStudentName } from "@/lib/references";
+import { catalogText, getCourseName, getDepartmentName, getSectionName, getStudentName } from "@/lib/references";
 import { searchErp } from "@/lib/search";
 import crypto from "crypto";
 
@@ -128,6 +128,12 @@ describe("reference labels", () => {
   it("uses a safe fallback for missing ids", () => {
     expect(getDepartmentName(state, "missing")).toBe("Unknown Department");
     expect(getStudentName(state, "nope")).toBe("Unknown Student");
+  });
+  it("shows a placeholder while course and section docs are loading", () => {
+    expect(catalogText("Unknown Course", true, "Unknown Course")).toBe("…");
+    expect(catalogText("Unknown Section", true, "Unknown Section")).toBe("…");
+    expect(catalogText("COURSE 2 · Course 2", true, "Unknown Course")).toBe("COURSE 2 · Course 2");
+    expect(catalogText("Unknown Course", false, "Unknown Course")).toBe("Unknown Course");
   });
 });
 

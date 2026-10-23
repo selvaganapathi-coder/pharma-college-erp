@@ -7,7 +7,7 @@ import { AlertCard, severityRank } from "@/components/alert-card";
 import { EmptyState } from "@/components/empty-state";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useApp } from "@/lib/app-context";
-import { getCourseName, getSectionName, getStaffName, getSubjectName } from "@/lib/references";
+import { catalogText, getCourseName, getSectionName, getStaffName, getSubjectName } from "@/lib/references";
 import { formatClock, slotTimes } from "@/lib/schedule";
 import { attendanceBySubject, attendancePercent, feeTotals, getMyAttendance, getMyCheckouts, getMyExams, getMyFees, getMyNotices, getMyTimetable } from "@/lib/repositories";
 import type { Student, TimetableSlot } from "@/lib/types";
@@ -28,8 +28,16 @@ export function UnlinkedRecord({ kind }: { kind: "student" | "staff" | "child" }
   );
 }
 
+function placementLabels(state: Parameters<typeof getCourseName>[0] & Parameters<typeof getSectionName>[0], student: Student, pending: boolean) {
+  return {
+    course: catalogText(getCourseName(state, student.courseId), pending, "Unknown Course"),
+    section: catalogText(getSectionName(state, student.sectionId), pending, "Unknown Section"),
+  };
+}
+
 export function ProfileCard({ student }: { student: Student }) {
-  const { state } = useApp();
+  const { state, catalogPending } = useApp();
+  const labels = placementLabels(state, student, catalogPending);
   return (
     <div className="erp-card flex flex-col items-center gap-4 p-4 text-center sm:flex-row sm:items-center sm:text-left">
       <Avatar className="size-16">
@@ -39,10 +47,10 @@ export function ProfileCard({ student }: { student: Student }) {
       <div className="min-w-0">
         <p className="text-lg font-semibold text-primary">{student.name}</p>
         <p className="text-sm text-muted-foreground">
-          {getCourseName(state, student.courseId)} · Year {student.year}
+          {labels.course} · Year {student.year}
         </p>
         <p className="text-xs text-muted-foreground">Admission No: {student.rollNo}</p>
-        <p className="text-xs text-muted-foreground">{getSectionName(state, student.sectionId)}</p>
+        <p className="text-xs text-muted-foreground">{labels.section}</p>
       </div>
     </div>
   );
@@ -178,7 +186,8 @@ export function NoticeList({ href }: { href: string }) {
 }
 
 export function StudentKpis({ student }: { student: Student }) {
-  const { state } = useApp();
+  const { state, catalogPending } = useApp();
+  const labels = placementLabels(state, student, catalogPending);
   const att = getMyAttendance(state, student.id);
   const pct = attendancePercent(att);
   const fees = feeTotals(getMyFees(state, student.id));
@@ -188,7 +197,7 @@ export function StudentKpis({ student }: { student: Student }) {
       <StatCard title="Attendance" value={pct == null ? "—" : `${pct}%`} note="Marked sessions" icon={<ClipboardCheck className="size-5" />} tone="gold" />
       <StatCard title="Pending fees" value={`₹${fees.due.toLocaleString("en-IN")}`} note={fees.nextDue ? `Due ${fees.nextDue.dueDate}` : "No open bills"} icon={<Receipt className="size-5" />} tone="red" />
       <StatCard title="Library" value={`${books}`} note="Books issued" icon={<BookOpen className="size-5" />} />
-      <StatCard title="Programme" value={getCourseName(state, student.courseId)} note={getSectionName(state, student.sectionId)} icon={<GraduationCap className="size-5" />} tone="maroon" />
+      <StatCard title="Programme" value={labels.course} note={labels.section} icon={<GraduationCap className="size-5" />} tone="maroon" />
     </div>
   );
 }

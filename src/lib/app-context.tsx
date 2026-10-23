@@ -53,6 +53,7 @@ type AppContextValue = {
   state: AppState;
   firebaseNote: string | null;
   needsSetup: boolean;
+  catalogPending: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null; role?: Role }>;
   registerAdmin: (input: { name: string; email: string; password: string; phone: string }) => Promise<string | null>;
   logout: () => void;
@@ -101,6 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [setupLocked, setSetupLocked] = useState(false);
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [catalogPending, setCatalogPending] = useState(false);
   const syncStarter = useRef<(profile: User) => void>(() => undefined);
   const cancelSync = useRef<() => void>(() => undefined);
 
@@ -139,6 +141,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setSyncError(note);
         },
         scope,
+        (phase) => {
+          if (alive) setCatalogPending(phase === "loading");
+        },
       );
     }
 
@@ -409,6 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void firebaseSignOut();
     setUserId(null);
     setState(EMPTY_STATE);
+    setCatalogPending(false);
     saveSession(null);
     setFirebaseNote(null);
     setDataOwner(null);
@@ -529,6 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state,
       firebaseNote,
       needsSetup,
+      catalogPending,
       login,
       registerAdmin,
       logout,
@@ -552,6 +559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state,
       firebaseNote,
       needsSetup,
+      catalogPending,
       login,
       registerAdmin,
       logout,
