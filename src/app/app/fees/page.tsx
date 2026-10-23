@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
 import { uid } from "@/lib/store";
-import type { Fee, FeePlan } from "@/lib/types";
+import type { Fee, FeePlan, Notice } from "@/lib/types";
 import { MobileRecordCard } from "@/components/responsive/mobile-record-card";
 
 declare global {
@@ -35,7 +35,7 @@ async function loadRazorpay() {
 }
 
 export default function FeesPage() {
-  const { state, save, remove, allowed, scopedStudentId, authHeader } = useApp();
+  const { state, save, remove, allowed, scopedStudentId, authHeader, user } = useApp();
   const sid = scopedStudentId();
   const canWrite = allowed("fees", "write") && !sid;
   const rows = useMemo(
@@ -89,6 +89,49 @@ export default function FeesPage() {
       rz.open();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Payment failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remind(fee: Fee) {
+    const student = state.students.find((s) => s.id === fee.studentId);
+    setBusy(true);
+    try {
+      const headers = await authHeader();
+      const res = await fetch("/api/notify", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Fee due: ${fee.term}`,
+          body: `${fee.term} of ₹${fee.amount.toLocaleString("en-IN")} was due on ${fee.dueDate}. Please pay from the college portal.`,
+          channels: ["inapp", "email", "sms", "whatsapp"],
+          studentId: fee.studentId,
+          audience: "All",
+        }),
+      });
+      const data = await res.json();
+      const overdueBill = fee.status !== "paid" && fee.dueDate < new Date().toISOString().slice(0, 10);
+      const notice: Notice = {
+        id: uid("n"),
+        title: `Fee due: ${fee.term}`,
+        body: `${student?.name ?? "Student"} · ₹${fee.amount.toLocaleString("en-IN")} due ${fee.dueDate}.`,
+        channels: ["inapp", "email", "sms", "whatsapp"],
+        audience: "All",
+        studentId: fee.studentId,
+        urgent: overdueBill,
+        severity: overdueBill ? "WARNING" : "INFO",
+        createdAt: new Date().toISOString(),
+        createdBy: user?.id ?? "",
+        createdByName: user?.name,
+        status: data.ok && (data.failed ?? []).length === 0 ? (data.delivered?.length ? "sent" : "not_configured") : "failed",
+        deliveryNote: String(data.note ?? ""),
+        readBy: [],
+      };
+      await save("notices", notice, `Fee reminder for ${fee.term}.`);
+      if (!data.ok) toast.error(data.note ?? "Reminder was not delivered.");
+      else if ((data.notConfigured ?? []).length) toast.message(data.note);
+      else toast.success("Fee reminder accepted.");
     } finally {
       setBusy(false);
     }
@@ -226,9 +269,16 @@ export default function FeesPage() {
             hideOnMobile: true,
             cell: (r) =>
               r.status !== "paid" ? (
-                <Button size="sm" className="min-h-11" disabled={busy} onClick={() => void startPay(r)}>
-                  Pay with Razorpay
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" className="min-h-11" disabled={busy} onClick={() => void startPay(r)}>
+                    Pay with Razorpay
+                  </Button>
+                  {canWrite ? (
+                    <Button size="sm" variant="outline" className="min-h-11" disabled={busy} onClick={() => void remind(r)}>
+                      Remind
+                    </Button>
+                  ) : null}
+                </div>
               ) : (
                 <Button size="sm" variant="outline" className="min-h-11" onClick={() => setReceipt(r)}>
                   Receipt

@@ -93,8 +93,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (!ready || !user) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <LoadingState label="Loading college portal…" />
+      <div className="min-h-dvh bg-background p-6">
+        <LoadingState label={!ready ? "Checking your session…" : "Opening the sign-in page…"} />
       </div>
     );
   }

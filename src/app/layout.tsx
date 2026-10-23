@@ -22,6 +22,13 @@ export const metadata: Metadata = {
   title: "GP Pharmacy College",
   description: "College Management System for GP Pharmacy College. Learn • Practice • Lead.",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/icon-192.png", sizes: "192x192" }],
+  },
   appleWebApp: { capable: true, title: "GP Pharmacy College" },
 };
 

@@ -22,6 +22,7 @@ import { mergeCloud } from "./sync";
 import { getFirebase } from "./firebase";
 import { normalizeTimetableSlot } from "./schedule";
 import type { DataScope } from "./scope";
+import { withTimeout } from "./session-gate";
 
 const DB_NAME = "gp-pharmacy-erp-v4";
 const STORE = "kv";
@@ -217,16 +218,22 @@ async function hydrateAdmin(): Promise<{ ok: boolean; data: Partial<AppState> | 
   const fb = getFirebase()!;
   const patch: Partial<AppState> = {};
   const denied: string[] = [];
-  for (const key of COLLECTION_KEYS) {
-    try {
-      const snap = await getDocs(collection(fb.db, key));
-      (patch as Record<string, unknown>)[key] = await mapDocs(snap);
-    } catch {
-      denied.push(key);
-    }
-  }
+  await Promise.all(
+    COLLECTION_KEYS.map(async (key) => {
+      try {
+        const snap = await withTimeout(
+          getDocs(collection(fb.db, key)),
+          8000,
+          `${key} took too long to load.`,
+        );
+        (patch as Record<string, unknown>)[key] = await mapDocs(snap);
+      } catch {
+        denied.push(key);
+      }
+    }),
+  );
   if (denied.length === COLLECTION_KEYS.length) {
-    return { ok: false, data: null, error: `Cloud read failed (${denied.join(", ")}).` };
+    return { ok: false, data: null, error: `Cloud read failed (${denied.join(", ")}). Publish firestore.rules and try again.` };
   }
   return { ok: true, data: patch, error: denied.length ? `Skipped ${denied.join(", ")}.` : undefined };
 }
@@ -453,6 +460,7 @@ export function listenAll(
   onChange: (key: CollectionKey, rows: AppState[CollectionKey]) => void,
   onError: (message: string) => void,
   scope?: Scope,
+  onCatalog?: (phase: "loading" | "ready") => void,
 ) {
   const fb = getFirebase();
   if (!fb) return () => undefined;
@@ -479,18 +487,12 @@ export function listenAll(
   if (scope.role === "student" || scope.role === "parent") {
     const sid = scope.studentId;
     if (!sid) return () => undefined;
-    unsubs.push(
-      onSnapshot(
-        doc(fb.db, "students", sid),
-        (snap) => {
-          const row = snap.exists() ? [stripSecrets({ id: snap.id, ...snap.data() })] : [];
-          onChange("students", row as AppState["students"]);
-        },
-        (err) => onError(err.message),
-      ),
-    );
-    const sectionId = scope.sectionId;
-    if (sectionId) {
+    let closed = false;
+    let boundSection = "";
+    // Course and section lists are office-only. Students may get their own documents by id.
+    const bindSection = (sectionId: string) => {
+      if (!sectionId || boundSection === sectionId) return;
+      boundSection = sectionId;
       unsubs.push(
         listenQuery(
           query(collection(fb.db, "timetable"), where("sectionId", "==", sectionId)),
@@ -511,7 +513,45 @@ export function listenAll(
           (err) => onError(err.message),
         ),
       );
-    }
+    };
+    unsubs.push(
+      onSnapshot(
+        doc(fb.db, "students", sid),
+        (snap) => {
+          const row = snap.exists() ? (stripSecrets({ id: snap.id, ...snap.data() }) as Student) : null;
+          onChange("students", (row ? [row] : []) as AppState["students"]);
+          if (!row || closed) {
+            onCatalog?.("ready");
+            return;
+          }
+          if (row.sectionId) bindSection(row.sectionId);
+          if (!row.courseId && !row.sectionId) {
+            onCatalog?.("ready");
+            return;
+          }
+          onCatalog?.("loading");
+          void (async () => {
+            try {
+              const [course, section] = await Promise.all([
+                row.courseId ? fetchDoc<Course>("courses", row.courseId) : Promise.resolve(null),
+                row.sectionId ? fetchDoc<Section>("sections", row.sectionId) : Promise.resolve(null),
+              ]);
+              if (closed) return;
+              onChange("courses", (course ? [course] : []) as AppState["courses"]);
+              onChange("sections", (section ? [section] : []) as AppState["sections"]);
+              onCatalog?.("ready");
+            } catch (err) {
+              if (!closed) {
+                onError(err instanceof Error ? err.message : "Could not load the course or section.");
+                onCatalog?.("ready");
+              }
+            }
+          })();
+        },
+        (err) => onError(err.message),
+      ),
+    );
+    if (scope.sectionId) bindSection(scope.sectionId);
     for (const key of ["fees", "attendance", "marks", "checkouts"] as const) {
       unsubs.push(listenQuery(query(collection(fb.db, key), where("studentId", "==", sid)), key, onChange, onError));
     }
@@ -526,7 +566,10 @@ export function listenAll(
       ),
     );
     unsubs.push(listenQuery(collection(fb.db, "books"), "books", onChange, onError));
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      closed = true;
+      unsubs.forEach((u) => u());
+    };
   }
 
   if (scope.role === "staff" && scope.staffId) {

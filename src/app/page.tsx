@@ -31,10 +31,46 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(true);
   const [resetNote, setResetNote] = useState<string | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
 
   useEffect(() => {
     if (ready && user) router.replace(portalHome(user.role));
   }, [ready, user, router]);
+
+  async function requestReset() {
+    const address = email.trim().toLowerCase();
+    if (!address) {
+      setResetNote(null);
+      setError("Enter your email first, then request a reset.");
+      return;
+    }
+    setResetBusy(true);
+    setError(null);
+    setResetNote(null);
+    try {
+      const res = await fetch("/api/auth/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: address }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; note?: string; transport?: string };
+      if (!res.ok || data.ok === false) {
+        setError(data.note ?? "Could not send the reset email.");
+        return;
+      }
+      if (data.transport === "resend") {
+        setResetNote(data.note ?? "If that email has a login, a reset message is on its way.");
+        return;
+      }
+      const out = await firebaseResetPassword(address);
+      if (out.ok) setResetNote(out.note);
+      else setError(out.note);
+    } catch {
+      setError("Could not reach the reset service. Try again.");
+    } finally {
+      setResetBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -119,17 +155,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 className="font-medium text-primary"
-                onClick={async () => {
-                  if (!email) {
-                    setError("Enter your email first, then request a reset.");
-                    return;
-                  }
-                  const out = await firebaseResetPassword(email.trim().toLowerCase());
-                  setError(out.ok ? null : out.note);
-                  setResetNote(out.ok ? out.note : null);
-                }}
+                disabled={resetBusy}
+                onClick={() => void requestReset()}
               >
-                Forgot password?
+                {resetBusy ? "Sending…" : "Forgot password?"}
               </button>
             </div>
             {error ? (
@@ -137,8 +166,12 @@ export default function LoginPage() {
                 {error}
               </p>
             ) : null}
-            {resetNote ? <p className="text-sm text-muted-foreground">{resetNote}</p> : null}
-            <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-white hover:bg-[#8f1c14]">
+            {resetNote ? (
+              <p className="rounded-xl border border-border bg-muted px-3 py-2 text-sm text-foreground" role="status">
+                {resetNote}
+              </p>
+            ) : null}
+            <Button type="submit" disabled={busy || resetBusy} className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-white hover:bg-[#8f1c14]">
               {busy ? "Please wait…" : "Sign In"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">

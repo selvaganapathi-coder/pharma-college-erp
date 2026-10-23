@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -16,12 +17,10 @@ import { EMPTY_STATE } from "@/lib/types";
 import {
   deleteRow,
   flushOutbox,
-  hydrateFromCloud,
   listenAll,
   loadState,
   loadUserProfile,
   makeAudit,
-  mergeCloud,
   persistLocal,
   saveSession,
   setDataOwner,
@@ -37,13 +36,12 @@ import { normalizeTimetableSlot } from "@/lib/schedule";
 import {
   currentIdToken,
   firebaseLogin,
-  firebaseRegister,
   firebaseSignOut,
   getFirebase,
   provisionPortalAuth,
   setupDocExists,
-  writeSetupLock,
 } from "@/lib/firebase";
+import { profileGate, signInAndOpen, withTimeout } from "@/lib/session-gate";
 
 type AppContextValue = {
   ready: boolean;
@@ -55,6 +53,7 @@ type AppContextValue = {
   state: AppState;
   firebaseNote: string | null;
   needsSetup: boolean;
+  catalogPending: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null; role?: Role }>;
   registerAdmin: (input: { name: string; email: string; password: string; phone: string }) => Promise<string | null>;
   logout: () => void;
@@ -103,6 +102,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [setupLocked, setSetupLocked] = useState(false);
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [catalogPending, setCatalogPending] = useState(false);
+  const syncStarter = useRef<(profile: User) => void>(() => undefined);
+  const cancelSync = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     let alive = true;
@@ -132,82 +134,118 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setSyncError(null);
         },
         (message) => {
+          const note = /permission/i.test(message)
+            ? "The college cloud refused this read. Publish firestore.rules from this repository, then sign in again."
+            : message;
           setSyncStatus("error");
-          setSyncError(message);
+          setSyncError(note);
         },
         scope,
+        (phase) => {
+          if (alive) setCatalogPending(phase === "loading");
+        },
       );
     }
 
-    async function sessionFromAuth() {
-      const fb = getFirebase();
-      const fbUser = fb?.auth.currentUser;
-      if (!fbUser) return null;
-      setSyncStatus("syncing");
-      const profile = await loadUserProfile(fbUser.uid, fbUser.email ?? "");
-      if (!profile || !profile.active) return null;
-      if (profile.role === "student" && !profile.studentId) return null;
-      if (profile.role === "parent" && !profile.childStudentId && !(profile.studentIds && profile.studentIds.length)) return null;
-      setDataOwner(profile.id);
-      const isolated = profile.role === "student" || profile.role === "parent" || profile.role === "staff";
-      const local = isolated ? EMPTY_STATE : await loadState(profile.id);
-      const cloud = await hydrateFromCloud(buildScope(profile));
-      if (!alive) return profile;
-      let nextState = isolated ? EMPTY_STATE : local;
-      if (cloud.ok && cloud.data) {
-        nextState = mergeCloud(isolated ? EMPTY_STATE : local, cloud.data, true);
-      } else {
-        setSyncStatus(cloud.error ? "error" : "offline");
-        setSyncError(cloud.error ?? null);
-        if (isolated) {
-          nextState = { ...EMPTY_STATE, users: [profile] };
+    let listeningFor: string | null = null;
+    let generation = 0;
+    cancelSync.current = () => {
+      generation += 1;
+      listeningFor = null;
+      unsubLive();
+    };
+
+    function startCloudSync(profile: User) {
+      if (listeningFor === profile.id) return;
+      unsubLive();
+      generation += 1;
+      const gen = generation;
+      listeningFor = profile.id;
+      void (async () => {
+        const isolated = profile.role === "student" || profile.role === "parent" || profile.role === "staff";
+        let local = EMPTY_STATE;
+        if (!isolated) {
+          try {
+            local = await withTimeout(loadState(profile.id), 2000, "Saved data on this device took too long to open.");
+          } catch {
+            local = EMPTY_STATE;
+          }
         }
+        if (!alive || gen !== generation) return;
+        setState((prev) => {
+          const base = isolated ? { ...EMPTY_STATE, users: [profile] } : local;
+          const users = base.users.some((u) => u.id === profile.id) ? base.users : [profile, ...base.users];
+          return { ...base, users };
+        });
+        void persistLocal(isolated ? { ...EMPTY_STATE, users: [profile] } : { ...local, users: local.users.some((u) => u.id === profile.id) ? local.users : [profile, ...local.users] }, profile.id);
+        if (!alive || gen !== generation) return;
+        attachLive(profile, isolated ? { ...EMPTY_STATE, users: [profile] } : local);
+        const flush = await flushOutbox();
+        if (!alive || gen !== generation) return;
+        if (!flush.ok && flush.error) {
+          setSyncStatus("error");
+          setSyncError(flush.error);
+        }
+        if (profile.role === "admin") void fetch("/api/setup").catch(() => undefined);
+      })().catch((err) => {
+        if (!alive || gen !== generation) return;
+        setSyncStatus("error");
+        setSyncError(err instanceof Error ? err.message : "Cloud sync failed.");
+      });
+    }
+    syncStarter.current = startCloudSync;
+
+    async function sessionFromAuth() {
+      const fbUser = getFirebase()?.auth.currentUser;
+      if (!fbUser) return null;
+      if (listeningFor === fbUser.uid) return null;
+      let profile: User | null;
+      try {
+        profile = await withTimeout(
+          loadUserProfile(fbUser.uid, fbUser.email ?? ""),
+          8000,
+          "Could not load your college profile in time. Check your connection and try again.",
+        );
+      } catch (err) {
+        setSyncStatus("error");
+        setSyncError(err instanceof Error ? err.message : "Could not load your college profile.");
+        return null;
       }
-      if (!nextState.users.some((u) => u.id === profile.id)) {
-        nextState = { ...nextState, users: [profile, ...nextState.users] };
-      }
-      setState(nextState);
-      void persistLocal(nextState, profile.id);
-      if (cloud.ok) {
-        setSyncStatus("synced");
-        setLastSyncedAt(new Date().toISOString());
-        setSyncError(null);
-      }
+      const gate = profileGate(profile);
+      if (!gate.ok || !profile || !alive) return null;
+      setDataOwner(profile.id);
       setUserId(profile.id);
       saveSession(profile.id);
-      attachLive(profile, nextState);
-      const flush = await flushOutbox();
-      if (!flush.ok && flush.error) {
-        setSyncStatus("error");
-        setSyncError(flush.error);
-      }
+      setState((prev) => (prev.users.some((u) => u.id === profile!.id) ? prev : { ...prev, users: [profile!, ...prev.users] }));
+      setSyncStatus("syncing");
+      startCloudSync(profile);
       return profile;
     }
 
     void (async () => {
       try {
-        const loaded = EMPTY_STATE;
         if (!alive) return;
-        setState(loaded);
+        setState(EMPTY_STATE);
         setUserId(null);
-        const locked = await setupDocExists();
-        if (alive) setSetupLocked(locked);
         const fb = getFirebase();
         if (!fb) {
           setSyncStatus("offline");
           setReady(true);
           return;
         }
-        await fb.auth.authStateReady();
+        await withTimeout(fb.auth.authStateReady(), 4000, "Signed-in session took too long to restore.").catch(() => undefined);
         if (!alive) return;
-        await sessionFromAuth();
+        if (fb.auth.currentUser) await sessionFromAuth();
         unsubAuth = onAuthStateChanged(fb.auth, (fbUser) => {
           if (!alive) return;
           if (!fbUser) {
-            unsubLive();
+            cancelSync.current();
             return;
           }
           void sessionFromAuth();
+        });
+        void setupDocExists().then((locked) => {
+          if (alive) setSetupLocked(locked);
         });
       } finally {
         if (alive) setReady(true);
@@ -312,48 +350,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const address = email.trim().toLowerCase();
-      const fb = await firebaseLogin(address, password);
-      setFirebaseNote(fb.note);
-      if (!fb.ok) return { error: fb.note };
-      const uidAuth = getFirebase()?.auth.currentUser?.uid;
-      if (!uidAuth) return { error: "Cloud sign-in did not complete." };
-      const profile = await loadUserProfile(uidAuth, address);
-      if (!profile?.active) {
-        await firebaseSignOut();
-        return { error: "This login has no college profile. Ask the office to create your access." };
+      const result = await signInAndOpen({
+        signIn: async () => {
+          const fb = await firebaseLogin(address, password);
+          setFirebaseNote(fb.note);
+          return fb;
+        },
+        loadProfile: async () => {
+          const uidAuth = getFirebase()?.auth.currentUser?.uid;
+          if (!uidAuth) return null;
+          return loadUserProfile(uidAuth, address);
+        },
+        onReady: (profile) => {
+          setDataOwner(profile.id);
+          setUserId(profile.id);
+          saveSession(profile.id);
+          setState((prev) => (prev.users.some((u) => u.id === profile.id) ? prev : { ...prev, users: [profile, ...prev.users] }));
+          setSyncStatus("syncing");
+          syncStarter.current(profile);
+        },
+      });
+      if (result.error) {
+        if (getFirebase()?.auth.currentUser) await firebaseSignOut();
+        return { error: result.error };
       }
-      if (profile.role === "student" && !profile.studentId) {
-        await firebaseSignOut();
-        return { error: "This login is not linked to a student record." };
-      }
-      if (profile.role === "parent" && !profile.childStudentId && !(profile.studentIds && profile.studentIds.length)) {
-        await firebaseSignOut();
-        return { error: "This login is not linked to a student record." };
-      }
-      setDataOwner(profile.id);
-      const isolated = profile.role === "student" || profile.role === "parent" || profile.role === "staff";
-      const cloud = await hydrateFromCloud(buildScope(profile));
-      const local = isolated ? EMPTY_STATE : await loadState(profile.id);
-      if (cloud.ok && cloud.data) {
-        let merged = mergeCloud(isolated ? EMPTY_STATE : local, cloud.data, true);
-        if (!merged.users.some((u) => u.id === profile.id)) {
-          merged = { ...merged, users: [profile, ...merged.users] };
-        }
-        setState(merged);
-        void persistLocal(merged, profile.id);
-      } else if (isolated) {
-        setState({ ...EMPTY_STATE, users: [profile] });
-        void persistLocal({ ...EMPTY_STATE, users: [profile] }, profile.id);
-      } else {
-        setState((prev) =>
-          prev.users.some((u) => u.id === profile.id) ? prev : { ...prev, users: [profile, ...prev.users] },
-        );
-      }
-      setUserId(profile.id);
-      saveSession(profile.id);
-      setSyncStatus("synced");
-      await audit("login", "session", profile.id, `${profile.role} signed in.`);
-      return { error: null, role: profile.role };
+      const profileId = getFirebase()?.auth.currentUser?.uid;
+      if (profileId) void audit("login", "session", profileId, `${result.role} signed in.`);
+      return { error: null, role: result.role };
     },
     [audit],
   );
@@ -364,52 +387,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return "Enter your name, email, and a password of at least 8 characters.";
       }
       if (await setupDocExists()) return "An administrator already exists. Please sign in.";
-      const address = input.email.trim().toLowerCase();
-      const created = await firebaseRegister(address, input.password);
-      setFirebaseNote(created.note);
-      if (!created.ok) return created.note;
-      const uidAuth = getFirebase()?.auth.currentUser?.uid;
-      if (!uidAuth) return "Cloud account was not created.";
-      try {
-        await writeSetupLock(uidAuth);
-      } catch {
-        await firebaseSignOut();
-        return "Another administrator finished setup first. Sign in with that account.";
-      }
-      const account: User = {
-        id: uidAuth,
-        uid: uidAuth,
-        email: address,
-        name: input.name.trim(),
-        role: "admin",
-        phone: input.phone.trim(),
-        active: true,
-      };
-      const result = await writeRow("users", account);
-      if (!result.ok) {
-        return result.error ?? "Could not save the administrator profile.";
-      }
-      setState((prev) => {
-        const next = { ...prev, users: [account, ...prev.users.filter((u) => u.id !== account.id)] };
-        void persistLocal(next);
-        return next;
+      const res = await fetch("/api/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: input.name.trim(),
+          email: input.email.trim().toLowerCase(),
+          password: input.password,
+          phone: input.phone.trim(),
+        }),
       });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; note?: string };
+      if (!res.ok || !data.ok) return data.note ?? "Could not create the administrator.";
+      const signed = await login(input.email, input.password);
+      if (signed.error) return `Administrator created. ${signed.error}`;
       setSetupLocked(true);
-      setUserId(account.id);
-      setDataOwner(account.id);
-      saveSession(account.id);
-      await audit("account-create", "users", account.id, "First administrator created.");
       return null;
     },
-    [audit],
+    [login],
   );
 
   const logout = useCallback(() => {
     const id = user?.id;
     if (user) void audit("logout", "session", user.id, `${user.role} signed out.`);
+    cancelSync.current();
     void firebaseSignOut();
     setUserId(null);
     setState(EMPTY_STATE);
+    setCatalogPending(false);
     saveSession(null);
     setFirebaseNote(null);
     setDataOwner(null);
@@ -530,6 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state,
       firebaseNote,
       needsSetup,
+      catalogPending,
       login,
       registerAdmin,
       logout,
@@ -553,6 +559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state,
       firebaseNote,
       needsSetup,
+      catalogPending,
       login,
       registerAdmin,
       logout,

@@ -70,6 +70,19 @@ export async function deleteAuthAccount(idToken: string) {
   }).catch(() => undefined);
 }
 
+export function httpStatusForOfficeError(message: string) {
+  if (message === "Sign in required." || message === "Invalid or expired session.") return 401;
+  if (
+    message === "No college profile." ||
+    message === "Only office staff can do this." ||
+    message === "This account is inactive." ||
+    message === "You cannot pay this fee."
+  ) {
+    return 403;
+  }
+  return 400;
+}
+
 export async function requireOffice(request: Request) {
   const token = bearerToken(request);
   if (!token) throw new Error("Sign in required.");

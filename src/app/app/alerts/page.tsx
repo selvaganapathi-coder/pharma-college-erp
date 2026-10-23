@@ -67,7 +67,7 @@ export default function AlertsPage() {
       const res = await fetch("/api/notify", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body, channels, studentId, sectionId }),
+        body: JSON.stringify({ title, body, channels, studentId, sectionId, audience }),
       });
       const data = await res.json();
       const notice: Notice = {
@@ -89,7 +89,7 @@ export default function AlertsPage() {
       };
       if (!data.ok) toast.error(data.note ?? "Alert was not delivered.");
       else if ((data.notConfigured ?? []).length) toast.message(data.note);
-      else toast.success("In-app alert stored. Provider channels reported success only if configured.");
+      else toast.success("Alert accepted.");
       await save("notices", notice, `Alert "${title}" (${severity}).`);
       setTitle("");
       setBody("");
@@ -102,7 +102,7 @@ export default function AlertsPage() {
     <Guard module="notices">
       <PageHeader
         title="Alerts"
-        note="Office alerts with severity. SMS/WhatsApp send only to a selected student's phone on file. Email needs SMTP. Success is never shown unless the provider actually accepted the message."
+        note="Office alerts with severity. Email uses Resend. SMS and WhatsApp use MSG91 templates. A channel is reported as sent only when the provider accepts it. Missing keys are skipped."
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Total alerts" value={`${state.notices.filter((n) => !n.archived).length}`} />

@@ -40,8 +40,8 @@ npm run build
 ### First administrator
 
 1. Sign in on `/` if an administrator already exists. The login page has no public registration.
-2. Only while Firebase `meta/setup` does not exist, open `/setup` to create the first administrator. After that lock is written, `/setup` redirects to sign-in.
-3. Publish `firestore.rules` and `storage.rules` from this repo.
+2. `/setup` stays closed unless the server, using `FIREBASE_SERVICE_ACCOUNT_JSON`, confirms that no administrator and no `meta/setup` document exist. The browser cannot create that lock itself.
+3. Publish `firestore.rules` and `storage.rules` from this repo. See **Publish Firebase rules** below.
 
 ### Students
 
@@ -58,17 +58,46 @@ Publish `firestore.rules` from this repository so the new portal isolation is en
 ### Firebase (pharmacy-98684)
 
 1. Authentication → enable Email/Password
-2. Authorized domains: `localhost` and your live host
+2. Authorized domains: `localhost` and `pharma-college-erp.vercel.app`
 3. Firestore + Storage
 4. Publish the rules files in this repository
 
-### Server keys (optional, required for live money/SMS)
+### Server keys
 
-| Variable | Purpose |
-| --- | --- |
-| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | Create and verify Razorpay orders |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Mark a fee **paid** in Firestore after signature verification |
-| `MSG91_AUTH_KEY` / `MSG91_TEMPLATE_ID` | SMS / WhatsApp to a student phone on file |
-| `SMTP_HOST` | Email (not implemented as a send transport yet; the API reports not configured honestly) |
+Copy `.env.example` to `.env.local` for local work. On Vercel, set the same names in Project → Settings → Environment Variables, then redeploy. `NEXT_PUBLIC_*` values are baked in at build time.
 
-Without Razorpay keys, Pay shows a configuration error. The app never stores card numbers and never marks a fee paid because a browser request succeeded.
+Firebase web config already has a public fallback for project `pharmacy-98684`. Set the `NEXT_PUBLIC_FIREBASE_*` variables when you want the build to use a different Firebase project.
+
+This app does not use `DATABASE_URL`, `NEXTAUTH_URL`, or a Google OAuth client. Sign-in is Firebase email and password.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_APP_URL` | Yes in production | Site origin for links, e.g. `https://pharma-college-erp.vercel.app` |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Yes for setup lock, fee ledger, Resend password reset | One-line Firebase service account JSON |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional | Email. Both must be set or email is skipped |
+| `MSG91_AUTH_KEY` | Optional | Shared MSG91 auth key for SMS and WhatsApp |
+| `MSG91_SENDER_ID` / `MSG91_SMS_TEMPLATE_ID` | Optional, both required to send SMS | DLT-approved sender and flow template. `MSG91_SENDER` and `MSG91_TEMPLATE_ID` are fallbacks |
+| `MSG91_WHATSAPP_INTEGRATED_NUMBER` / `MSG91_WHATSAPP_TEMPLATE_NAME` | Optional, both required to send WhatsApp | Approved WhatsApp template. `MSG91_WHATSAPP_NAMESPACE` and `MSG91_WHATSAPP_LANGUAGE` are optional |
+| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | Optional | Fee checkout. Without them Pay explains that it is not configured |
+
+SMS in India must use a DLT-registered template. The template should expose two variables, `VAR1` (title, 30 characters) and `VAR2` (message, 60 characters). WhatsApp sends only an approved template (`body_1` title, `body_2` message) from `MSG91_WHATSAPP_INTEGRATED_NUMBER`. If a key is missing, the server logs a warning and continues. Alerts, fee reminders, and new student or parent logins use this layer.
+
+### Vercel
+
+Framework preset: Next.js. Root directory: repository root. Build command: `npm run build`. Install command: `npm install`. Node.js 20 or newer. No `vercel.json` redirect or output override is required; `vercel.json` only pins the Next.js framework.
+
+Production URL to allow in Firebase Authentication → Settings → Authorized domains: `pharma-college-erp.vercel.app` and `localhost`.
+
+### Publish Firebase rules
+
+The live project must be updated after this change. Client apps cannot create `meta/setup` or another administrator. `GET /api/setup` writes that lock when the service account can see an existing admin.
+
+```bash
+npx firebase-tools deploy --only firestore:rules,firestore:indexes --project pharmacy-98684
+```
+
+Sign in to Firebase with an account that can deploy `pharmacy-98684` first (`npx firebase-tools login`). Indexes in `firestore.indexes.json` are unchanged; the command publishes them with the rules.
+
+### First administrator
+
+`/setup` asks the server whether an administrator already exists. Without `FIREBASE_SERVICE_ACCOUNT_JSON` the form stays closed. With the key, the server creates the Auth user, `users/{uid}`, and `meta/setup` only when both are absent.

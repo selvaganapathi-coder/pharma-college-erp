@@ -28,11 +28,13 @@ export function EmptyState({
 
 export function LoadingState({ label = "Loading records…" }: { label?: string }) {
   return (
-    <div role="status" aria-live="polite" className="space-y-2">
-      <span className="sr-only">{label}</span>
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="h-20 animate-pulse rounded-xl bg-muted sm:h-16" />
-      ))}
+    <div role="status" aria-live="polite" className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-sm font-semibold text-primary">{label}</p>
+      <div className="mt-3 space-y-2">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-16 animate-pulse rounded-xl border border-border bg-white sm:h-14" />
+        ))}
+      </div>
     </div>
   );
 }
