@@ -37,8 +37,8 @@ export function PortalGuard({ portal, children }: { portal: PortalId; children: 
 
   if (!ready || !user) {
     return (
-      <div className="min-h-screen bg-background p-4 sm:p-6">
-        <LoadingState label={`Loading ${COLLEGE_NAME}…`} />
+      <div className="min-h-dvh bg-background p-4 sm:p-6">
+        <LoadingState label={!ready ? `Checking your session…` : `Opening the sign-in page…`} />
       </div>
     );
   }
@@ -71,7 +71,13 @@ export function PortalShell({
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="min-h-dvh bg-background p-4 sm:p-6">
+        <LoadingState label={`Opening ${portalLabel(portal)}…`} />
+      </div>
+    );
+  }
 
   const unreadNotices = state.notices.filter((n) => !n.archived && noticeVisibleTo(n, user, state) && !(n.readBy ?? []).includes(user.id));
   const unread = unreadNotices.length;

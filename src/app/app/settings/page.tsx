@@ -22,13 +22,13 @@ export default function SettingsPage() {
           <p className="text-xs text-muted-foreground">Admin: full office. Staff: class work. Student/parent: own file only.</p>
         </SectionCard>
         <SectionCard title="Notifications">
-          <p className="text-sm">In-app alerts always store. WhatsApp/SMS require MSG91. Email requires SMTP.</p>
+          <p className="text-sm">In-app alerts always store. Email uses Resend. SMS and WhatsApp use MSG91. Missing keys are skipped, not treated as sent.</p>
         </SectionCard>
         <SectionCard title="Payment">
           <p className="text-sm">Razorpay Checkout. Ledger updates only after signature verification plus FIREBASE_SERVICE_ACCOUNT_JSON.</p>
         </SectionCard>
         <SectionCard title="Email / SMS">
-          <p className="text-sm">MSG91 keys required for SMS/WhatsApp. SMTP is reported as not implemented until a transport is added.</p>
+          <p className="text-sm">Resend sends email. MSG91 sends SMS (DLT template) and WhatsApp (approved template). Without those keys the portal still stores the in-app notice.</p>
         </SectionCard>
         <SectionCard title="Security">
           <p className="text-sm">Firebase Auth holds passwords. Firestore rules in this repo must be published.</p>

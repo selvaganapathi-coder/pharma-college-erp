@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { bearerToken, readFirestoreDoc, verifyIdToken } from "@/lib/server/session";
+import { queryByField } from "@/lib/server/firestore-query";
+import { deliverChannels } from "@/lib/server/messaging";
 
 const WINDOW_MS = 60_000;
 const hits = new Map<string, number[]>();
@@ -11,6 +13,25 @@ function rateLimit(uid: string) {
   recent.push(now);
   hits.set(uid, recent);
   return true;
+}
+
+type Recipient = { email?: string; phone?: string; name?: string };
+
+function contacts(row: Record<string, string | number | boolean | null>, audience: string): Recipient[] {
+  const aud = audience.toLowerCase();
+  const student: Recipient = {
+    email: String(row.email ?? ""),
+    phone: String(row.phone ?? ""),
+    name: String(row.name ?? ""),
+  };
+  const parent: Recipient = {
+    email: String(row.parentEmail ?? ""),
+    phone: String(row.parentPhone ?? ""),
+    name: String(row.parentName ?? ""),
+  };
+  if (aud === "parent" || aud === "parents") return [parent];
+  if (aud === "all") return [student, parent];
+  return [student];
 }
 
 export async function POST(request: Request) {
@@ -38,55 +59,54 @@ export async function POST(request: Request) {
   const message = String(body.body ?? "").trim();
   const channels: string[] = Array.isArray(body.channels) ? body.channels.map(String) : [];
   const studentId = String(body.studentId ?? "");
+  const sectionId = String(body.sectionId ?? "");
+  const audience = String(body.audience ?? "All");
   if (!title || !message) {
     return NextResponse.json({ ok: false, note: "Title and message are required." }, { status: 400 });
   }
 
-  let recipientPhone = "";
+  const external = channels.some((channel) => channel === "sms" || channel === "whatsapp" || channel === "email");
+  const recipients: Recipient[] = [];
   if (studentId) {
     const student = await readFirestoreDoc(token, "students", studentId);
-    recipientPhone = String(student?.phone ?? "").replace(/\D/g, "");
-    if (!recipientPhone) {
-      return NextResponse.json({
-        ok: false,
-        note: "The selected student has no phone number on file for SMS/WhatsApp.",
-      }, { status: 400 });
+    if (!student) return NextResponse.json({ ok: false, note: "That student record was not found." }, { status: 404 });
+    recipients.push(...contacts(student, audience));
+  } else if (sectionId) {
+    try {
+      const students = await queryByField(token, "students", "sectionId", sectionId, 80);
+      for (const student of students) recipients.push(...contacts(student, audience));
+    } catch (err) {
+      return NextResponse.json(
+        { ok: false, note: err instanceof Error ? err.message : "Could not load the section." },
+        { status: 502 },
+      );
     }
   }
 
   const sent: string[] = [];
   const failed: string[] = [];
   const skipped: string[] = [];
-
   if (channels.includes("inapp")) sent.push("in-app stored");
 
-  if (channels.includes("sms") || channels.includes("whatsapp")) {
-    const authKey = process.env.MSG91_AUTH_KEY;
-    if (!authKey) skipped.push("MSG91_AUTH_KEY is not configured");
-    else if (!recipientPhone) skipped.push("SMS/WhatsApp needs a student with a phone number");
-    else {
-      try {
-        const res = await fetch("https://control.msg91.com/api/v5/flow/", {
-          method: "POST",
-          headers: { authkey: authKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-            template_id: process.env.MSG91_TEMPLATE_ID,
-            sender: process.env.MSG91_SENDER ?? "GPCOLG",
-            short_url: "0",
-            recipients: [{ mobiles: recipientPhone, VAR1: title, VAR2: message }],
-          }),
-        });
-        if (res.ok) sent.push(...channels.filter((c) => c === "sms" || c === "whatsapp"));
-        else failed.push("MSG91 rejected the request");
-      } catch {
-        failed.push("MSG91 network error");
-      }
-    }
+  if (external && recipients.length === 0) {
+    skipped.push("Select a student or section to send email, SMS, or WhatsApp.");
   }
 
-  if (channels.includes("email")) {
-    if (!process.env.SMTP_HOST) skipped.push("SMTP_HOST is not configured");
-    else skipped.push("SMTP delivery is configured but this server does not send mail without an SMTP transport implementation");
+  const seen = new Set<string>();
+  for (const recipient of recipients.slice(0, 80)) {
+    const key = `${recipient.email ?? ""}|${recipient.phone ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const result = await deliverChannels({
+      channels,
+      email: recipient.email,
+      phone: recipient.phone,
+      title,
+      body: message,
+    });
+    sent.push(...result.sent.map((channel) => `${channel}${recipient.name ? ` → ${recipient.name}` : ""}`));
+    skipped.push(...result.skipped);
+    failed.push(...result.failed);
   }
 
   const ok = failed.length === 0;

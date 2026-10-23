@@ -1,7 +1,9 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import {
+  browserLocalPersistence,
   createUserWithEmailAndPassword,
   getAuth,
+  initializeAuth,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
@@ -29,12 +31,24 @@ export function firebaseProjectId() {
 let bundle: FirebaseBundle | null = null;
 let provision: FirebaseBundle | null = null;
 
+/**
+ * First-party persistence only. The default Firebase auth helper also loads a
+ * cross-origin iframe on authDomain, which stalls sign-in on the Vercel host.
+ */
+function authFor(app: FirebaseApp) {
+  try {
+    return initializeAuth(app, { persistence: browserLocalPersistence });
+  } catch {
+    return getAuth(app);
+  }
+}
+
 export function getFirebase(): FirebaseBundle | null {
   if (!isFirebaseConfigured()) return null;
   if (typeof window === "undefined") return null;
   if (bundle) return bundle;
   const app = getApps().find((a) => a.name === "[DEFAULT]") ?? initializeApp(firebaseConfig);
-  bundle = { app, auth: getAuth(app), db: getFirestore(app), storage: getStorage(app) };
+  bundle = { app, auth: authFor(app), db: getFirestore(app), storage: getStorage(app) };
   return bundle;
 }
 
@@ -43,7 +57,7 @@ function getProvision(): FirebaseBundle | null {
   if (typeof window === "undefined") return null;
   if (provision) return provision;
   const app = getApps().find((a) => a.name === "provision") ?? initializeApp(firebaseConfig, "provision");
-  provision = { app, auth: getAuth(app), db: getFirestore(app), storage: getStorage(app) };
+  provision = { app, auth: authFor(app), db: getFirestore(app), storage: getStorage(app) };
   return provision;
 }
 
@@ -58,8 +72,11 @@ export function firebaseMessage(err: unknown) {
     return "Email or password is wrong.";
   }
   if (code === "auth/too-many-requests") return "Too many attempts. Wait a few minutes, then try again.";
+  if (code === "auth/invalid-email") return "Enter a valid email address.";
   if (code === "auth/operation-not-allowed") return "Turn on Email/Password in Firebase Authentication.";
-  if (code === "auth/unauthorized-domain") return "Add this site to Firebase Authentication authorized domains.";
+  if (code === "auth/unauthorized-domain" || code === "auth/unauthorized-continue-uri") {
+    return "Add this site to Firebase Authentication authorized domains, then try again.";
+  }
   if (code === "auth/email-already-in-use") return "That email already has an account. Sign in instead.";
   if (err && typeof err === "object" && "message" in err) return String((err as { message: string }).message);
   return "Firebase login failed.";
@@ -122,13 +139,19 @@ export async function writeSetupLock(adminUid: string) {
   });
 }
 
+const RESET_SENT = "If that email has a login, a reset message is on its way.";
+
 export async function firebaseResetPassword(email: string) {
   const fb = getFirebase();
   if (!fb) return { ok: false as const, note: "Firebase is not configured on this device." };
   try {
-    await sendPasswordResetEmail(fb.auth, email);
-    return { ok: true as const, note: "If that email has a login, a reset message is on its way." };
+    await sendPasswordResetEmail(fb.auth, email, { url: window.location.origin, handleCodeInApp: false });
+    return { ok: true as const, note: RESET_SENT };
   } catch (err) {
+    const code = authErrorCode(err);
+    if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
+      return { ok: true as const, note: RESET_SENT };
+    }
     return { ok: false as const, note: firebaseMessage(err) };
   }
 }

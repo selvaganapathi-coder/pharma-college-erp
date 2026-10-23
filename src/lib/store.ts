@@ -22,6 +22,7 @@ import { mergeCloud } from "./sync";
 import { getFirebase } from "./firebase";
 import { normalizeTimetableSlot } from "./schedule";
 import type { DataScope } from "./scope";
+import { withTimeout } from "./session-gate";
 
 const DB_NAME = "gp-pharmacy-erp-v4";
 const STORE = "kv";
@@ -217,16 +218,22 @@ async function hydrateAdmin(): Promise<{ ok: boolean; data: Partial<AppState> | 
   const fb = getFirebase()!;
   const patch: Partial<AppState> = {};
   const denied: string[] = [];
-  for (const key of COLLECTION_KEYS) {
-    try {
-      const snap = await getDocs(collection(fb.db, key));
-      (patch as Record<string, unknown>)[key] = await mapDocs(snap);
-    } catch {
-      denied.push(key);
-    }
-  }
+  await Promise.all(
+    COLLECTION_KEYS.map(async (key) => {
+      try {
+        const snap = await withTimeout(
+          getDocs(collection(fb.db, key)),
+          8000,
+          `${key} took too long to load.`,
+        );
+        (patch as Record<string, unknown>)[key] = await mapDocs(snap);
+      } catch {
+        denied.push(key);
+      }
+    }),
+  );
   if (denied.length === COLLECTION_KEYS.length) {
-    return { ok: false, data: null, error: `Cloud read failed (${denied.join(", ")}).` };
+    return { ok: false, data: null, error: `Cloud read failed (${denied.join(", ")}). Publish firestore.rules and try again.` };
   }
   return { ok: true, data: patch, error: denied.length ? `Skipped ${denied.join(", ")}.` : undefined };
 }

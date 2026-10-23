@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { Course, Department, Section, Student, User } from "@/lib/types";
 import { firstError, validatePortalPassword, validateStudent } from "@/lib/validation";
-import { createAuthAccount, deleteAuthAccount, requireOffice, writeFirestoreDoc } from "@/lib/server/office";
+import { createAuthAccount, deleteAuthAccount, httpStatusForOfficeError, requireOffice, writeFirestoreDoc } from "@/lib/server/office";
+import { sendPortalWelcome } from "@/lib/server/messaging";
 import { readFirestoreDoc } from "@/lib/server/session";
 
 function asStudent(body: unknown): Student | null {
@@ -115,14 +116,33 @@ export async function POST(request: Request) {
       );
     }
 
+    const delivery = await Promise.all([
+      body.createLogin && student.authUid
+        ? sendPortalWelcome({ role: "student", name: student.name, email: student.email, phone: student.phone })
+        : Promise.resolve(null),
+      body.createParentLogin && student.parentAuthUid
+        ? sendPortalWelcome({
+            role: "parent",
+            name: student.parentName,
+            email: student.parentEmail,
+            phone: student.parentPhone,
+          })
+        : Promise.resolve(null),
+    ]).catch((err) => {
+      console.warn("[students] welcome message failed", err instanceof Error ? err.message : err);
+      return [null, null];
+    });
+
     return NextResponse.json({
       ok: true,
       student,
       authUid: student.authUid ?? null,
       parentAuthUid: student.parentAuthUid ?? null,
       actor: session.uid,
+      delivery,
     });
   } catch (err) {
-    return NextResponse.json({ ok: false, note: err instanceof Error ? err.message : "Student create failed." }, { status: 400 });
+    const note = err instanceof Error ? err.message : "Student create failed.";
+    return NextResponse.json({ ok: false, note }, { status: httpStatusForOfficeError(note) });
   }
 }
