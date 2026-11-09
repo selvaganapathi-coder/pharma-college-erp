@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { availableBarcodes, canIssue, canRenew, DEFAULT_LIBRARY_RULES, findDuplicate, previewRows, readBackup, returnCopy, type LibraryCopy, type LibraryRules, type Reservation } from "@/lib/library-rules";
+import { samplePharmacyBooks } from "@/lib/sample-catalog";
 import type { Book, Checkout } from "@/lib/types";
 
 const book = (over: Partial<Book> = {}): Book => ({
@@ -22,6 +23,15 @@ const loan = (over: Partial<Checkout> = {}): Checkout => ({
 });
 
 const rules: LibraryRules = { ...DEFAULT_LIBRARY_RULES, studentLimit: 1, studentDays: 14, maxRenewals: 1 };
+
+describe("sample catalog", () => {
+  it("loads 50 pharmacy titles with unique ISBNs", () => {
+    const books = samplePharmacyBooks();
+    expect(books).toHaveLength(50);
+    expect(new Set(books.map((book) => book.isbn)).size).toBe(50);
+    expect(books.some((book) => book.subject === "Pharmacology")).toBe(true);
+  });
+});
 
 describe("library rules", () => {
   it("sets a student due date 14 days out and keeps a barcode", () => {

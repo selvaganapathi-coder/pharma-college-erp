@@ -214,6 +214,10 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
           today={today}
           name={user?.name ?? "Librarian"}
           onJump={openView}
+          onSearch={(text) => {
+            setQuery(text);
+            openView("catalog");
+          }}
         />
       ) : null}
       {shown === "catalog" || shown === "book" ? (
@@ -278,6 +282,7 @@ function Dashboard({
   today,
   name,
   onJump,
+  onSearch,
 }: {
   books: Book[];
   checkouts: Checkout[];
@@ -287,6 +292,7 @@ function Dashboard({
   today: string;
   name: string;
   onJump: (view: View) => void;
+  onSearch: (text: string) => void;
 }) {
   const loans = openLoans(checkouts);
   const copies = books.reduce((sum, book) => sum + book.copies, 0);
@@ -301,11 +307,16 @@ function Dashboard({
     ["Overdue", overdue.length, "reports"],
     ["Reservations", waiting.length, "circulation"],
   ] as const;
+  const [find, setFind] = useState("");
   function person(id: string) {
     return students.find((row) => row.id === id)?.name ?? staff.find((row) => row.id === id)?.name ?? "Member";
   }
   return (
     <div className="space-y-4">
+      <form className="flex flex-col gap-2 rounded-lg border border-[#e6e9ef] bg-white p-3 sm:flex-row" onSubmit={(event) => { event.preventDefault(); onSearch(find.trim()); }}>
+        <Input value={find} onChange={(event) => setFind(event.target.value)} placeholder="Find a book by title, author, ISBN, or subject" />
+        <Button type="submit">Search {books.length} books</Button>
+      </form>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-medium text-[#8b93a7]">Library / Dashboard</p>

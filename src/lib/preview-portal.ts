@@ -1,4 +1,5 @@
 import { EMPTY_STATE, type AppState, type Role, type User } from "./types";
+import { samplePharmacyBooks } from "./sample-catalog";
 
 export const PREVIEW_ROLE_KEY = "gp-preview-role";
 
@@ -128,19 +129,13 @@ export function previewBundle(role: Role): { user: User; state: AppState } {
       checkouts: [
         {
           id: "preview-checkout-late",
-          bookId: "preview-book-cognosy",
+          bookId: "sample-book-31",
           studentId,
           issuedOn: daysAgo(16),
           dueOn: daysAgo(2),
         },
       ],
-      books: [
-        { id: "preview-book-pharm", isbn: "9780000000011", title: "Dispensing Pharmaceutics", author: "Cooper", copies: 2, subject: "Pharmaceutics", edition: "12th", year: "2024", resourceType: "Textbook", course: "B.Pharm", semester: "1" },
-        { id: "preview-book-chem", isbn: "9780000000028", title: "Pharmaceutical Chemistry", author: "Beckett", copies: 2, subject: "Pharmaceutical Chemistry", edition: "4th", year: "2023", resourceType: "Textbook", course: "B.Pharm", semester: "2" },
-        { id: "preview-book-cology", isbn: "9780000000035", title: "Essentials of Pharmacology", author: "Tripathi", copies: 2, subject: "Pharmacology", edition: "8th", year: "2025", resourceType: "Textbook", course: "B.Pharm", semester: "3" },
-        { id: "preview-book-cognosy", isbn: "9780000000042", title: "Pharmacognosy", author: "Kokate", copies: 1, subject: "Pharmacognosy" },
-        { id: "preview-book-practice", isbn: "9780000000059", title: "Pharmacy Practice", author: "Tipnis", copies: 1, subject: "Pharmacy Practice", resourceType: "Reference", callNumber: "RS 100", shelf: "Reference", edition: "1st" },
-      ],
+      books: samplePharmacyBooks(),
       staff: [
         {
           id: staffRecordId,
