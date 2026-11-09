@@ -240,6 +240,8 @@ export type Book = {
   resourceType?: "Textbook" | "Reference" | "Journal" | "E-book" | "Pharmacopoeia" | "Other" | "Book" | "Rare";
   callNumber?: string;
   shelf?: string;
+  row?: string;
+  rack?: string;
   course?: string;
   semester?: string;
   description?: string;

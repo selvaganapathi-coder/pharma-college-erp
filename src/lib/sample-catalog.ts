@@ -75,6 +75,8 @@ export function samplePharmacyBooks(): Book[] {
       resourceType,
       callNumber: `RS ${120 + index}`,
       shelf: subject,
+      row: String((index % 5) + 1),
+      rack: String.fromCharCode(65 + (index % 5)),
       course: "B.Pharm",
       semester: String((index % 8) + 1),
       description: resourceType === "Reference" || resourceType === "Pharmacopoeia" ? "Reference use only." : "",

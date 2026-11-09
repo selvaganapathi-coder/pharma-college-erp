@@ -82,6 +82,9 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
   const [query, setQuery] = useState("");
   const [resource, setResource] = useState("All");
   const [onlyFree, setOnlyFree] = useState(false);
+  const [letter, setLetter] = useState("All");
+  const [sort, setSort] = useState<"az" | "za" | "author">("az");
+  const [showAdd, setShowAdd] = useState(false);
   const canWrite = mode === "desk" && allowed("library", "write");
   const today = new Date().toISOString().slice(0, 10);
   const books = state.books.filter((book) => !book.deletedAt);
@@ -101,9 +104,14 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
       if (q && !hay.includes(q)) return false;
       if (resource !== "All" && (book.resourceType ?? "Book") !== resource) return false;
       if (onlyFree && !free) return false;
+      if (letter !== "All" && !book.title.toUpperCase().startsWith(letter)) return false;
       return true;
+    }).sort((a, b) => {
+      const left = sort === "author" ? a.author : a.title;
+      const right = sort === "author" ? b.author : b.title;
+      return sort === "za" ? right.localeCompare(left) : left.localeCompare(right);
     });
-  }, [books, query, resource, onlyFree, state.checkouts]);
+  }, [books, query, resource, onlyFree, letter, sort, state.checkouts]);
 
   const selected = books.find((book) => book.id === selectedId) ?? null;
 
@@ -253,10 +261,29 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
         />
       ) : null}
       {shown === "catalog" || shown === "book" ? (
-        <div className="space-y-3">
-          <CatalogFilters query={query} setQuery={setQuery} resource={resource} setResource={setResource} onlyFree={onlyFree} setOnlyFree={setOnlyFree} />
-          {canWrite ? <AddBook books={books} onSave={(book) => void save("books", book, `Saved book ${book.title}.`)} /> : null}
-          <BookList books={results} checkouts={state.checkouts} onOpen={setSelectedId} />
+        <div className="space-y-4">
+          <CatalogFinder
+            books={books}
+            checkouts={state.checkouts}
+            students={state.students}
+            query={query}
+            setQuery={setQuery}
+            resource={resource}
+            setResource={setResource}
+            onlyFree={onlyFree}
+            setOnlyFree={setOnlyFree}
+            letter={letter}
+            setLetter={setLetter}
+            sort={sort}
+            setSort={setSort}
+            canWrite={canWrite}
+            showAdd={showAdd}
+            setShowAdd={setShowAdd}
+            onRemove={(book) => void save("books", { ...book, deletedAt: new Date().toISOString() }, `Removed ${book.title}.`)}
+            rows={results}
+            onOpen={setSelectedId}
+          />
+          {canWrite && showAdd ? <AddBook books={books} onSave={(book) => { void save("books", book, `Saved book ${book.title}.`); setShowAdd(false); }} /> : null}
           {selected ? (
             <BookDetail
               book={selected}
@@ -479,6 +506,96 @@ function Dashboard({
             </ul>
           )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+function CatalogFinder(props: {
+  books: Book[];
+  checkouts: Checkout[];
+  students: { id: string; name: string; rollNo: string }[];
+  query: string;
+  setQuery: (value: string) => void;
+  resource: string;
+  setResource: (value: string) => void;
+  onlyFree: boolean;
+  setOnlyFree: (value: boolean) => void;
+  letter: string;
+  setLetter: (value: string) => void;
+  sort: "az" | "za" | "author";
+  setSort: (value: "az" | "za" | "author") => void;
+  canWrite: boolean;
+  showAdd: boolean;
+  setShowAdd: (value: boolean) => void;
+  onRemove: (book: Book) => void;
+  rows: Book[];
+  onOpen: (id: string) => void;
+}) {
+  const total = props.books.length;
+  const out = openLoans(props.checkouts).length;
+  const inside = props.books.reduce((sum, book) => sum + book.copies, 0) - out;
+  const letters = ["All", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          ["Total books", total],
+          ["In library", inside],
+          ["Out with students", out],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-2xl bg-white p-4 ring-1 ring-[#e6e9ef]">
+            <p className="text-xs font-semibold tracking-wide text-[#8b93a7] uppercase">{label}</p>
+            <p className="mt-1 text-3xl font-semibold text-[#0f3d68]">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input className="min-w-56 flex-1" value={props.query} onChange={(event) => props.setQuery(event.target.value)} placeholder="Search title, author, ISBN, or barcode" />
+        <select className="h-11 rounded-lg border border-[#e6e9ef] bg-white px-2 text-sm" value={props.sort} onChange={(event) => props.setSort(event.target.value as "az" | "za" | "author")}>
+          <option value="az">A to Z</option>
+          <option value="za">Z to A</option>
+          <option value="author">Author</option>
+        </select>
+        <select className="h-11 rounded-lg border border-[#e6e9ef] bg-white px-2 text-sm" value={props.resource} onChange={(event) => props.setResource(event.target.value)}>
+          {["All", "Textbook", "Reference", "Journal", "E-book", "Pharmacopoeia", "Other"].map((item) => <option key={item}>{item}</option>)}
+        </select>
+        {props.canWrite ? <Button type="button" onClick={() => props.setShowAdd(!props.showAdd)}>{props.showAdd ? "Close form" : "Add book"}</Button> : null}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {letters.map((item) => (
+          <button key={item} type="button" onClick={() => props.setLetter(item)} className={`h-8 min-w-8 rounded-md px-2 text-xs font-semibold ${props.letter === item ? "bg-[#0f3d68] text-white" : "bg-white text-[#3e4657] ring-1 ring-[#e6e9ef]"}`}>{item}</button>
+        ))}
+      </div>
+      <div className="space-y-3">
+        {props.rows.length === 0 ? <p className="rounded-2xl bg-white p-4 text-sm text-[#667085]">No books match.</p> : props.rows.map((book) => {
+          const loans = openLoans(props.checkouts).filter((row) => row.bookId === book.id);
+          const free = Math.max(0, book.copies - loans.length);
+          return (
+            <article key={book.id} className="rounded-2xl bg-white p-4 ring-1 ring-[#e6e9ef]">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <button type="button" className="text-left" onClick={() => props.onOpen(book.id)}>
+                  <p className="text-base font-semibold text-[#0f3d68]">{book.title}</p>
+                  <p className="text-sm text-[#667085]">{book.author} · {book.subject} · {book.resourceType ?? "Book"}</p>
+                </button>
+                <div className="flex gap-2 text-xs font-semibold">
+                  <span className="rounded-full bg-[#e8f7ee] px-2 py-1 text-[#067647]">In {free}</span>
+                  <span className="rounded-full bg-[#e7f0ff] px-2 py-1 text-[#0f3d68]">Out {loans.length}</span>
+                  {props.canWrite ? <Button size="sm" variant="outline" onClick={() => props.onRemove(book)}>Remove</Button> : null}
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-[#1f2533]">Row {book.row || "—"} · Rack {book.rack || book.shelf || "—"}</p>
+              {loans.length === 0 ? <p className="mt-1 text-xs text-[#8b93a7]">No student has this book out.</p> : (
+                <ul className="mt-2 space-y-1 text-xs text-[#3e4657]">
+                  {loans.map((loan) => {
+                    const student = props.students.find((row) => row.id === loan.studentId);
+                    return <li key={loan.id}>{student?.name ?? "Member"}{student?.rollNo ? ` · ${student.rollNo}` : ""} · out {loan.issuedOn} · due {loan.dueOn}</li>;
+                  })}
+                </ul>
+              )}
+            </article>
+          );
+        })}
       </div>
     </div>
   );
