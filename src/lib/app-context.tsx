@@ -309,6 +309,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       const result = await writeRow(key, item);
       if (!result.ok) {
+        if (result.queued && readPreviewRole()) {
+          setSyncStatus("offline");
+          setSyncError(null);
+          return { ok: true };
+        }
         setSyncStatus(result.queued ? "syncing" : "error");
         setSyncError(result.error ?? "Save did not reach the cloud.");
         toast.error(result.error ?? "Save did not reach the cloud.");

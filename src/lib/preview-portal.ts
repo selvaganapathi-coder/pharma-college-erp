@@ -2,6 +2,12 @@ import { EMPTY_STATE, type AppState, type Role, type User } from "./types";
 
 export const PREVIEW_ROLE_KEY = "gp-preview-role";
 
+function daysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
 const courseId = "preview-course";
 const sectionId = "preview-section";
 const studentId = "preview-student";
@@ -80,12 +86,42 @@ export function previewBundle(role: Role): { user: User; state: AppState } {
           admissionDate: "2026-06-01",
           status: "active",
         },
+        {
+          id: "preview-student-blocked",
+          rollNo: "",
+          name: "Meera Nair",
+          email: "preview-blocked@college.local",
+          phone: "",
+          gender: "Female",
+          dob: "",
+          bloodGroup: "",
+          parentName: "",
+          parentPhone: "",
+          parentEmail: "",
+          departmentId: "preview-dept",
+          courseId,
+          sectionId,
+          year: 1,
+          batch: "2026–2030",
+          address: "",
+          admissionDate: "2026-06-01",
+          status: "active",
+        },
+      ],
+      checkouts: [
+        {
+          id: "preview-checkout-late",
+          bookId: "preview-book-cognosy",
+          studentId,
+          issuedOn: daysAgo(16),
+          dueOn: daysAgo(2),
+        },
       ],
       books: [
         { id: "preview-book-pharm", isbn: "9780000000011", title: "Dispensing Pharmaceutics", author: "Cooper", copies: 2, subject: "Pharmaceutics" },
         { id: "preview-book-chem", isbn: "9780000000028", title: "Pharmaceutical Chemistry", author: "Beckett", copies: 2, subject: "Pharmaceutical Chemistry" },
         { id: "preview-book-cology", isbn: "9780000000035", title: "Essentials of Pharmacology", author: "Tripathi", copies: 2, subject: "Pharmacology" },
-        { id: "preview-book-cognosy", isbn: "9780000000042", title: "Pharmacognosy", author: "Kokate", copies: 2, subject: "Pharmacognosy" },
+        { id: "preview-book-cognosy", isbn: "9780000000042", title: "Pharmacognosy", author: "Kokate", copies: 1, subject: "Pharmacognosy" },
         { id: "preview-book-practice", isbn: "9780000000059", title: "Pharmacy Practice", author: "Tipnis", copies: 2, subject: "Pharmacy Practice" },
       ],
       staff: [
