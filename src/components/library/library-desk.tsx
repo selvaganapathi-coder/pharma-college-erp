@@ -221,7 +221,29 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
           <CatalogFilters query={query} setQuery={setQuery} resource={resource} setResource={setResource} onlyFree={onlyFree} setOnlyFree={setOnlyFree} />
           {canWrite ? <AddBook books={books} onSave={(book) => void save("books", book, `Saved book ${book.title}.`)} /> : null}
           <BookList books={results} checkouts={state.checkouts} onOpen={setSelectedId} />
-          {selected ? <BookDetail book={selected} checkouts={state.checkouts} canEdit={canWrite} onIssue={() => openView("circulation")} onReserve={() => openView("circulation")} /> : null}
+          {selected ? (
+            <BookDetail
+              book={selected}
+              copies={copies.filter((copy) => copy.bookId === selected.id)}
+              checkouts={state.checkouts}
+              canEdit={canWrite}
+              onIssue={() => openView("circulation")}
+              onReserve={() => openView("circulation")}
+              onUpdateCopy={(copy) => {
+                if (copies.some((item) => item.barcode === copy.barcode && item.id !== copy.id)) {
+                  toast.error("That barcode is already used.");
+                  return;
+                }
+                setCopies((current) => {
+                  const next = current.map((item) => (item.id === copy.id ? copy : item));
+                  saveCopies(next);
+                  return next;
+                });
+                recordActivity(user?.name ?? "Librarian", `Updated copy ${copy.barcode}.`);
+                toast.success("Copy updated.");
+              }}
+            />
+          ) : null}
         </div>
       ) : null}
       {shown === "members" ? <Members stateStudents={state.students} stateStaff={state.staff} checkouts={state.checkouts} reservations={reservations} today={today} canWrite={canWrite} onSaveStudent={(row) => void save("students", row, `Registered ${row.name}.`)} onSaveStaff={(row) => void save("staff", row, `Registered ${row.name}.`)} /> : null}
@@ -387,40 +409,74 @@ function BookList({ books, checkouts, onOpen }: { books: Book[]; checkouts: Chec
 
 function BookDetail({
   book,
+  copies = [],
   checkouts,
   canEdit,
   onIssue,
   onReserve,
+  onUpdateCopy,
 }: {
   book: Book;
+  copies?: LibraryCopy[];
   checkouts: Checkout[];
   canEdit: boolean;
   onIssue: () => void;
   onReserve: () => void;
+  onUpdateCopy?: (copy: LibraryCopy) => void;
 }) {
-  const copies = availableBarcodes(book, checkouts);
+  const free = copies.filter((copy) => copy.status === "available").length;
   const out = openLoans(checkouts).filter((row) => row.bookId === book.id);
   return (
     <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
-      <h2 className="text-lg font-semibold text-[#1f2533]">{book.title}</h2>
-      <p className="text-sm text-[#667085]">{book.author} · {book.edition || "—"} · ISBN {book.isbn || "—"}</p>
-      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-        <div>Call number: {book.callNumber || "—"}</div>
-        <div>Shelf: {book.shelf || book.subject || "—"}</div>
-        <div>Type: {book.resourceType ?? "Book"}</div>
-        <div>Course: {book.course || "—"} {book.semester || ""}</div>
-        <div>Copies: {book.copies} · free {copies.length} · on loan {out.length}</div>
-        <div>{book.resourceType === "Reference" || book.resourceType === "Rare" ? "Reference use only unless the rules allow it to leave." : "Can be borrowed."}</div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-[#1f2533]">{book.title}</h2>
+          <p className="text-sm text-[#667085]">{book.author} · {book.edition || "Edition not set"} · {book.year || "Year not set"} · ISBN {book.isbn || "—"}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={onIssue}>{canEdit ? "Issue a copy" : "Borrow"}</Button>
+          <Button variant="outline" onClick={onReserve}>Reserve</Button>
+        </div>
+      </div>
+      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+        <div className="rounded-md bg-[#f5f6fa] px-3 py-2">Subject<br /><strong>{book.subject || "—"}</strong></div>
+        <div className="rounded-md bg-[#f5f6fa] px-3 py-2">Type<br /><strong>{book.resourceType ?? "Book"}</strong></div>
+        <div className="rounded-md bg-[#f5f6fa] px-3 py-2">Shelf<br /><strong>{book.shelf || book.subject || "—"}</strong></div>
+        <div className="rounded-md bg-[#f5f6fa] px-3 py-2">Call number<br /><strong>{book.callNumber || "—"}</strong></div>
+        <div className="rounded-md bg-[#f5f6fa] px-3 py-2">Course<br /><strong>{book.course || "—"} {book.semester || ""}</strong></div>
+        <div className="rounded-md bg-[#f5f6fa] px-3 py-2">Copies<br /><strong>{copies.length || book.copies} total · {free} free · {out.length} on loan</strong></div>
       </dl>
-      <ul className="mt-3 space-y-1 text-sm">
-        {out.map((row) => <li key={row.id}>{row.barcode || "Copy"} · due {row.dueOn} · {row.studentId || row.staffId}</li>)}
-        {copies.map((code) => <li key={code}>{code} · on shelf</li>)}
-      </ul>
-      <div className="mt-3 flex gap-2">
-        <Button onClick={onIssue}>{canEdit ? "Issue" : "Borrow"}</Button>
-        <Button variant="outline" onClick={onReserve}>Reserve</Button>
+      {book.description ? <p className="mt-3 text-sm text-[#d92d20]">{book.description}</p> : null}
+      {book.digitalLink ? <p className="mt-1 text-sm"><a className="text-[#1b6de0]" href={book.digitalLink}>Open licensed digital copy</a></p> : null}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs uppercase text-[#8b93a7]">
+            <tr><th className="py-2">Barcode</th><th>Shelf</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            {copies.map((copy) => <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onSave={onUpdateCopy} />)}
+          </tbody>
+        </table>
       </div>
     </section>
+  );
+}
+
+function CopyRow({ copy, canEdit, onSave }: { copy: LibraryCopy; canEdit: boolean; onSave?: (copy: LibraryCopy) => void }) {
+  const [barcode, setBarcode] = useState(copy.barcode);
+  const [shelf, setShelf] = useState(copy.shelf);
+  const [status, setStatus] = useState(copy.status);
+  return (
+    <tr className="border-t border-[#eef1f6]">
+      <td className="py-2 pr-2"><Input value={barcode} disabled={!canEdit} onChange={(event) => setBarcode(event.target.value)} /></td>
+      <td className="py-2 pr-2"><Input value={shelf} disabled={!canEdit} onChange={(event) => setShelf(event.target.value)} /></td>
+      <td className="py-2 pr-2">
+        <select className="h-11 w-full rounded-lg border border-[#e6e9ef] px-2 text-sm" value={status} disabled={!canEdit} onChange={(event) => setStatus(event.target.value as LibraryCopy["status"])}>
+          {["available", "on loan", "reserved", "lost", "damaged", "reference-only", "withdrawn"].map((item) => <option key={item}>{item}</option>)}
+        </select>
+      </td>
+      <td className="py-2">{canEdit && onSave ? <Button type="button" size="sm" variant="outline" onClick={() => onSave({ ...copy, barcode, shelf, status })}>Save</Button> : null}</td>
+    </tr>
   );
 }
 

@@ -20,15 +20,22 @@ function libraryView(pathname: string) {
   return "dashboard" as const;
 }
 
-const ITEMS = [
-  { href: "/library", label: "Dashboard", icon: Library },
-  { href: "/library/catalog", label: "Catalog", icon: BookOpen },
-  { href: "/library/members", label: "Members", icon: Users },
-  { href: "/library/circulation", label: "Circulation", icon: Undo2 },
-  { href: "/library/rules", label: "Rules", icon: Settings },
-  { href: "/library/reports", label: "Reports", icon: FileBarChart },
-  { href: "/library/guide", label: "Guide", icon: ClipboardList },
+const GROUPS = [
+  { title: "Desk", items: [
+    { href: "/library", label: "Dashboard", icon: Library },
+    { href: "/library/circulation", label: "Circulation", icon: Undo2 },
+  ]},
+  { title: "Collection", items: [
+    { href: "/library/catalog", label: "Catalog", icon: BookOpen },
+    { href: "/library/members", label: "Members", icon: Users },
+  ]},
+  { title: "Office", items: [
+    { href: "/library/rules", label: "Rules", icon: Settings },
+    { href: "/library/reports", label: "Reports", icon: FileBarChart },
+    { href: "/library/guide", label: "Guide", icon: ClipboardList },
+  ]},
 ];
+const ITEMS = GROUPS.flatMap((group) => group.items);
 
 export default function LibrarianLayout({ children }: { children: ReactNode }) {
   const { ready, user, logout } = useApp();
@@ -74,18 +81,24 @@ export default function LibrarianLayout({ children }: { children: ReactNode }) {
           <BrandMark />
           <p className="mt-2 text-[11px] font-medium text-[#8b93a7]">Librarian Portal</p>
         </div>
-        <p className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-[#8b93a7] uppercase">Library</p>
-        <nav className="flex flex-col gap-0.5">
-          {ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = libraryView(item.href) === shown;
-            return (
-              <button key={item.href} type="button" onClick={() => show(item.href)} className={`flex min-h-9 items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657] hover:bg-[#f4f6f9]"}`}>
-                <Icon className="size-4" />
-                {item.label}
-              </button>
-            );
-          })}
+        <nav className="flex flex-col gap-4">
+          {GROUPS.map((group) => (
+            <div key={group.title}>
+              <p className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-[#8b93a7] uppercase">{group.title}</p>
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = libraryView(item.href) === shown;
+                  return (
+                    <button key={item.href} type="button" onClick={() => show(item.href)} className={`flex min-h-10 items-center gap-2.5 rounded-md px-3 text-left text-[13px] font-medium ${active ? "bg-[#0f3d68] text-white" : "text-[#243044] hover:bg-[#f3f6fa]"}`}>
+                      <Icon className="size-4" />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="mt-auto flex items-center gap-3 border-t border-[#e6e9ef] px-2 pt-3">
           <span className="flex size-9 items-center justify-center rounded-full bg-[#e7f0ff] text-sm font-bold text-[#1b6de0]">{user.name.slice(0, 1)}</span>
