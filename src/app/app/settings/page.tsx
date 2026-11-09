@@ -19,7 +19,7 @@ export default function SettingsPage() {
         </SectionCard>
         <SectionCard title="User & roles">
           <p className="text-sm">{state.users.filter((u) => u.active).length} active logins.</p>
-          <p className="text-xs text-muted-foreground">Admin: full office. Staff: class work. Student/parent: own file only.</p>
+          <p className="text-xs text-muted-foreground">Admin runs the office. Librarian runs the library. Faculty and students use the catalog and their own loans. Parents see the linked student. Passwords stay in Firebase Auth.</p>
         </SectionCard>
         <SectionCard title="Notifications">
           <p className="text-sm">In-app alerts always store. Email uses Resend. SMS and WhatsApp use MSG91. Missing keys are skipped, not treated as sent.</p>

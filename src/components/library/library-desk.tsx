@@ -192,8 +192,18 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
     );
   }
 
+  const sections: View[] = ["dashboard", "catalog", "members", "circulation", "rules", "reports", "guide"];
   return (
     <div className="space-y-4">
+      {mode === "desk" && !onNavigate ? (
+        <div className="flex gap-1 overflow-x-auto">
+          {sections.map((item) => (
+            <button key={item} type="button" onClick={() => openView(item)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium capitalize ${shown === item ? "bg-[#e7f0ff] text-[#1b6de0]" : "bg-white text-[#3e4657]"}`}>
+              {item}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {shown === "dashboard" ? <Dashboard books={books} checkouts={state.checkouts} reservations={reservations} today={today} onJump={openView} /> : null}
       {shown === "catalog" || shown === "book" ? (
         <div className="space-y-3">
