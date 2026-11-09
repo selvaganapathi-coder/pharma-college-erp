@@ -231,13 +231,20 @@ export type Book = {
   author: string;
   copies: number;
   /** Pharmacy shelf, such as Pharmacology. */
+  subtitle?: string;
+  year?: string;
+  publisher?: string;
+  keywords?: string;
   subject?: string;
   edition?: string;
-  resourceType?: "Book" | "Journal" | "Reference" | "Rare";
+  resourceType?: "Textbook" | "Reference" | "Journal" | "E-book" | "Pharmacopoeia" | "Other" | "Book" | "Rare";
   callNumber?: string;
   shelf?: string;
   course?: string;
   semester?: string;
+  description?: string;
+  catalogedOn?: string;
+  digitalLink?: string;
   photoUrl?: string;
   deletedAt?: string;
 };
@@ -253,6 +260,7 @@ export type Checkout = {
   staffId?: string;
   renewals?: number;
   barcode?: string;
+  processedBy?: string;
 };
 
 export type AuditLog = {

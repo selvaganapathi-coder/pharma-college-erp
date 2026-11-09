@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableBarcodes, canIssue, canRenew, DEFAULT_LIBRARY_RULES, type LibraryRules } from "@/lib/library-rules";
+import { availableBarcodes, canIssue, canRenew, DEFAULT_LIBRARY_RULES, findDuplicate, previewRows, returnCopy, type LibraryCopy, type LibraryRules, type Reservation } from "@/lib/library-rules";
 import type { Book, Checkout } from "@/lib/types";
 
 const book = (over: Partial<Book> = {}): Book => ({
@@ -43,5 +43,20 @@ describe("library rules", () => {
     expect(canRenew(rules, loan(), "2026-11-09", "student").ok).toBe(true);
     expect(canRenew(rules, loan({ renewals: 1 }), "2026-11-09", "student").ok).toBe(false);
     expect(availableBarcodes(book({ copies: 2 }), [loan({ barcode: "b1-1" })])).toEqual(["b1-2"]);
+  });
+
+  it("keeps titles and copies separate and queues the next member", () => {
+    const title = book({ isbn: "978", edition: "2nd" });
+    expect(findDuplicate([title], { isbn: "978", title: "Other", edition: "" })?.id).toBe("b1");
+    const copy: LibraryCopy = { id: "b1-1", barcode: "b1-1", bookId: "b1", shelf: "A", status: "on loan", purchaseDate: "", price: 0, notes: "" };
+    const waiting: Reservation = { id: "r1", bookId: "b1", memberId: "s2", memberName: "Meera", memberKind: "student", at: "2026-11-01", status: "waiting" };
+    const result = returnCopy([copy], [waiting], "b1-1", "2026-11-09");
+    expect(result.copies[0]?.status).toBe("reserved");
+    expect(result.reservations[0]?.status).toBe("ready");
+    expect(result.heldFor).toBe("Meera");
+    expect(previewRows(["2026-001"], [{ collegeId: "2026-001", name: "Aarav" }, { collegeId: "2026-002", name: "New" }])).toEqual([
+      { collegeId: "2026-001", name: "Aarav", action: "update" },
+      { collegeId: "2026-002", name: "New", action: "add" },
+    ]);
   });
 });
