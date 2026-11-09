@@ -16,20 +16,20 @@ export function StatCard({
   tone?: "gold" | "red" | "cream" | "maroon";
 }) {
   const iconWrap = {
-    gold: "bg-[#fff4cc] text-primary",
-    red: "bg-[#fde8e8] text-primary",
-    cream: "bg-muted text-primary",
-    maroon: "bg-primary text-secondary",
+    gold: "bg-[#e7f0ff] text-[#1b6de0]",
+    red: "bg-[#fdecec] text-[#d92d20]",
+    cream: "bg-[#eefbf3] text-[#067647]",
+    maroon: "bg-[#fff6e8] text-[#b54708]",
   }[tone];
   return (
-    <Card className="erp-card">
-      <CardContent className="flex items-start justify-between gap-3 pt-5">
+    <Card className="rounded-lg border border-[#e6e9ef] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <CardContent className="flex items-start justify-between gap-3 px-4 py-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="mt-1 break-words text-[26px] leading-none font-semibold tracking-tight text-primary sm:text-[32px]">{value}</p>
-          {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
+          <p className="text-xs font-medium tracking-wide text-[#667085] uppercase">{title}</p>
+          <p className="mt-1 break-words text-[22px] leading-none font-semibold tracking-tight text-[#1f2533]">{value}</p>
+          {note ? <p className="mt-2 text-xs text-[#8b93a7]">{note}</p> : null}
         </div>
-        {icon ? <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-2xl", iconWrap)}>{icon}</span> : null}
+        {icon ? <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", iconWrap)}>{icon}</span> : null}
       </CardContent>
     </Card>
   );

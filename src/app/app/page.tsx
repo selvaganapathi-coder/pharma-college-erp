@@ -43,7 +43,14 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <Welcome name={user.name} note="Here's what's happening at your pharmacy college today." />
+      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-medium text-[#8b93a7]">Home / Dashboard</p>
+          <h1 className="text-xl font-semibold text-[#1f2533]">Dashboard</h1>
+          <p className="text-sm text-[#667085]">Hello, {user.name.split(" ")[0]}. Here is the college for today.</p>
+        </div>
+        <p className="text-sm text-[#667085]">{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Students" value={`${liveStudents.length}`} note={`${liveStudents.filter((s) => s.status === "active").length} enrolled`} icon={<GraduationCap className="size-5" />} tone="gold" />
         <StatCard title="Staff" value={`${liveStaff.filter((s) => s.status === "active").length}`} note={`${liveStaff.filter((s) => staffTypeOf(s) === "teaching").length} teaching`} icon={<Users className="size-5" />} tone="red" />
@@ -61,15 +68,7 @@ export default function DashboardPage() {
           <EmptyState title="Get the college live" description="Add departments, programmes, and staff, then admit students. Metrics stay at zero until real records exist." actionLabel="Add a department" onAction={() => router.push("/app/departments")} />
         </div>
       ) : null}
-      <div className="mt-6 grid gap-4 xl:grid-cols-[1.05fr_1fr_1fr]">
-        <div className="erp-card relative min-h-[260px] overflow-hidden bg-gradient-to-br from-primary via-[#7a1520] to-[#3b0a0a] p-6 text-primary-foreground">
-          <p className="text-xs font-semibold tracking-[0.2em] text-secondary uppercase">Campus</p>
-          <h2 className="mt-8 max-w-xs text-2xl font-semibold leading-tight sm:mt-20 sm:text-3xl">Shaping Future Pharmacists</h2>
-          <p className="mt-2 text-sm text-primary-foreground/80">Knowledge · Research · Innovation · Service</p>
-          <Button className="mt-5 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/90" onClick={() => router.push("/app/students")}>
-            Our Mission
-          </Button>
-        </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ScheduleCard slots={todaySlots} weekday={weekday} />
         <AlertsColumn notices={important} />
       </div>
@@ -94,11 +93,12 @@ export default function DashboardPage() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <SectionCard title="Quick actions">
           <div className="flex flex-wrap gap-2">
-            {allowed("students", "write") ? <Button className="rounded-full" onClick={() => router.push("/app/students")}><Plus className="size-4" /> Add Student</Button> : null}
-            {allowed("staff", "write") ? <Button variant="outline" className="rounded-full" onClick={() => router.push("/app/staff")}>Add Staff</Button> : null}
-            {allowed("timetable", "write") ? <Button variant="outline" className="rounded-full" onClick={() => router.push("/app/timetable")}>Create Timetable</Button> : null}
-            {allowed("attendance", "write") ? <Button variant="outline" className="rounded-full" onClick={() => router.push("/app/attendance")}>Record Attendance</Button> : null}
-            {allowed("notices", "write") ? <Button variant="outline" className="rounded-full" onClick={() => router.push("/app/alerts")}>Create Notice</Button> : null}
+            {allowed("students", "write") ? <Button onClick={() => router.push("/app/students")}><Plus className="size-4" /> Add Student</Button> : null}
+            {allowed("staff", "write") ? <Button variant="outline" onClick={() => router.push("/app/staff")}>Add Staff</Button> : null}
+            {allowed("timetable", "write") ? <Button variant="outline" onClick={() => router.push("/app/timetable")}>Create Timetable</Button> : null}
+            {allowed("attendance", "write") ? <Button variant="outline" onClick={() => router.push("/app/attendance")}>Record Attendance</Button> : null}
+            {allowed("notices", "write") ? <Button variant="outline" onClick={() => router.push("/app/alerts")}>Create Notice</Button> : null}
+            {allowed("library", "read") ? <Button variant="outline" onClick={() => router.push("/app/library")}>Open Library</Button> : null}
           </div>
         </SectionCard>
         <SectionCard title="Recent activity" action={<Link href="/app/audit" className="text-xs font-semibold text-primary">View all</Link>}>
@@ -115,21 +115,6 @@ export default function DashboardPage() {
             </ul>
           )}
         </SectionCard>
-      </div>
-    </div>
-  );
-}
-
-function Welcome({ name, note }: { name: string; note: string }) {
-  return (
-    <div className="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <h1 className="text-[22px] font-semibold text-primary sm:text-[26px] lg:text-[28px]">Welcome back, {name.split(" ")[0]}!</h1>
-        <p className="text-sm text-muted-foreground">{note}</p>
-      </div>
-      <div className="text-sm text-muted-foreground lg:text-right">
-        <p>{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
-        <p className="italic">Better education for a healthier tomorrow</p>
       </div>
     </div>
   );
@@ -178,7 +163,6 @@ function AlertsColumn({ notices }: { notices: import("@/lib/types").Notice[] }) 
       ) : (
         <div className="space-y-2">{notices.map((n) => <AlertCard key={n.id} notice={n} compact />)}</div>
       )}
-      <p className="mt-4 rounded-2xl bg-secondary/25 px-3 py-3 text-xs text-primary">Education in pharmacy today leads to a healthier society tomorrow.</p>
     </SectionCard>
   );
 }

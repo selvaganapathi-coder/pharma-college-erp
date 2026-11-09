@@ -88,7 +88,7 @@ export function PortalShell({
       <nav className="flex flex-col gap-5" aria-label={`${portalLabel(portal)} navigation`}>
         {groups.map((group) => (
           <div key={group.title}>
-            <p className="mb-2 px-3 text-[10px] font-semibold tracking-[0.22em] text-secondary/90 uppercase">{group.title}</p>
+            <p className="mt-4 mb-1 px-3 text-[11px] font-semibold tracking-wide text-[#8b93a7] uppercase first:mt-0">{group.title}</p>
             <div className="flex flex-col gap-0.5">
               {group.items.map((item) => {
                 const active = pathname === item.href || (item.href !== portalHome(user!.role) && pathname.startsWith(item.href));
@@ -98,17 +98,17 @@ export function PortalShell({
                     key={item.href}
                     href={item.href}
                     onClick={onClick}
-                    className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${
+                    className={`flex min-h-9 items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition ${
                       active
-                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                        : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-white"
+                        ? "bg-[#e7f0ff] text-[#1b6de0]"
+                        : "text-[#3e4657] hover:bg-[#f4f6f9]"
                     }`}
                     aria-current={active ? "page" : undefined}
                   >
                     <Icon className="size-4 shrink-0" />
                     <span className="min-w-0 break-words">{item.label}</span>
                     {/notice|alert/i.test(item.label) && unread > 0 ? (
-                      <span className="ml-auto rounded-full bg-white px-1.5 text-[10px] font-bold text-primary">{unread}</span>
+                      <span className="ml-auto rounded-full bg-[#1b6de0] px-1.5 text-[10px] font-bold text-white">{unread}</span>
                     ) : null}
                   </Link>
                 );
@@ -128,37 +128,38 @@ export function PortalShell({
   }
 
   return (
-    <div className={`min-h-dvh min-w-0 bg-background ${dense ? "lg:grid lg:grid-cols-[248px_minmax(0,1fr)]" : "lg:grid lg:grid-cols-[228px_minmax(0,1fr)]"}`}>
-      <aside className="sticky top-0 hidden h-dvh flex-col bg-sidebar p-4 text-sidebar-foreground lg:flex">
-        <div className="mb-6 px-1">
-          <BrandMark light />
+    <div className={`min-h-dvh min-w-0 bg-[#f5f6fa] ${dense ? "md:grid md:grid-cols-[248px_minmax(0,1fr)]" : "md:grid md:grid-cols-[232px_minmax(0,1fr)]"}`}>
+      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-[#e6e9ef] bg-white px-3 py-4 text-[#1f2533] md:flex">
+        <div className="mb-4 px-2">
+          <BrandMark />
+          <p className="mt-2 text-[11px] font-medium text-[#8b93a7]">{portalLabel(portal)}</p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">{renderNav()}</div>
-        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-black/15 px-3 py-3">
-          <span className="flex size-9 items-center justify-center rounded-full bg-secondary text-sm font-bold text-sidebar">
+        <div className="mt-3 flex items-center gap-3 border-t border-[#e6e9ef] px-2 pt-3">
+          <span className="flex size-9 items-center justify-center rounded-full bg-[#e7f0ff] text-sm font-bold text-[#1b6de0]">
             {user.name.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">{user.name}</p>
-            <p className="truncate text-[11px] text-secondary/90">{portalLabel(portal)}</p>
+            <p className="truncate text-[11px] text-[#8b93a7]">{roleLabel(user.role)}</p>
           </div>
         </div>
       </aside>
-      <div className={`min-w-0 ${bottomNav ? "pb-20 lg:pb-0" : ""}`}>
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-border/70 bg-white/95 px-3 py-2.5 backdrop-blur sm:gap-3 sm:px-4 lg:px-6">
+      <div className={`min-w-0 ${bottomNav ? "pb-20 md:pb-0" : ""}`}>
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-[#e6e9ef] bg-white px-3 sm:gap-3 sm:px-4 lg:px-6">
           <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger render={<Button variant="outline" size="icon" className="size-11 shrink-0 lg:hidden" aria-label="Open menu" />}>
+            <SheetTrigger render={<Button variant="outline" size="icon" className="size-10 shrink-0 md:hidden" aria-label="Open menu" />}>
               <Menu />
             </SheetTrigger>
-            <SheetContent side="left" className="w-[min(100vw-2rem,20rem)] bg-sidebar p-0 text-sidebar-foreground" showCloseButton={false}>
-              <SheetHeader className="flex flex-row items-center justify-between gap-2 border-b border-white/10 px-4 py-4">
-                <SheetTitle className="text-secondary">
-                  <BrandMark light />
+            <SheetContent side="left" className="w-[min(100vw-2rem,18rem)] bg-white p-0 text-[#1f2533]" showCloseButton={false}>
+              <SheetHeader className="flex flex-row items-center justify-between gap-2 border-b border-[#e6e9ef] px-4 py-4">
+                <SheetTitle className="text-[#1f2533]">
+                  <BrandMark />
                 </SheetTitle>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-11 shrink-0 text-white hover:bg-white/10 hover:text-white"
+                  className="size-10 shrink-0"
                   aria-label="Close menu"
                   onClick={() => setOpen(false)}
                 >
@@ -166,12 +167,8 @@ export function PortalShell({
                 </Button>
               </SheetHeader>
               <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">{renderNav(() => setOpen(false))}</div>
-              <div className="border-t border-white/10 p-3">
-                <Button
-                  variant="outline"
-                  className="min-h-11 w-full border-white/20 bg-transparent text-white hover:bg-white/10"
-                  onClick={signOut}
-                >
+              <div className="border-t border-[#e6e9ef] p-3">
+                <Button variant="outline" className="min-h-11 w-full" onClick={signOut}>
                   <LogOut className="size-4" />
                   Sign out
                 </Button>
@@ -204,18 +201,18 @@ export function PortalShell({
               }
             }}
           />
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-secondary" aria-hidden>
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#e7f0ff] text-sm font-bold text-[#1b6de0]" aria-hidden>
             {user.name.slice(0, 1).toUpperCase()}
           </span>
           <div className="hidden text-right text-xs lg:block">
             <p className="font-semibold">{user.name.split(" ")[0]}</p>
             <p className="text-muted-foreground">{roleLabel(user.role)}</p>
           </div>
-          <Button size="icon" variant="outline" className="hidden size-11 lg:inline-flex" onClick={signOut} aria-label="Sign out">
+          <Button size="icon" variant="outline" className="hidden size-9 md:inline-flex" onClick={signOut} aria-label="Sign out">
             <LogOut className="size-4" />
           </Button>
         </header>
-        <main className="p-3 sm:p-4 md:p-6 lg:p-7">
+        <main className="p-3 sm:p-4 md:p-6">
           {firebaseNote ? (
             <p className="mb-4 break-words rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{firebaseNote}</p>
           ) : null}
@@ -223,7 +220,7 @@ export function PortalShell({
         </main>
       </div>
       {bottomNav ? (
-        <nav className="fixed right-0 bottom-0 left-0 z-30 grid grid-cols-5 border-t border-border bg-white/95 px-1 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] lg:hidden" aria-label="Primary">
+        <nav className="fixed right-0 bottom-0 left-0 z-30 grid grid-cols-5 border-t border-[#e6e9ef] bg-white px-1 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden" aria-label="Primary">
           {bottomNav.map((item) => {
             const home = portalHome(user.role);
             const active = pathname === item.href || (item.href !== home && pathname.startsWith(item.href));
