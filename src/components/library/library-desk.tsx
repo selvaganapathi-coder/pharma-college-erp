@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,14 +28,18 @@ import { toast } from "sonner";
 
 type View = "dashboard" | "catalog" | "book" | "members" | "circulation" | "rules" | "reports";
 
-export function LibraryDesk({ mode = "desk" }: { mode?: "desk" | "student" | "faculty" }) {
+export function LibraryDesk({ mode = "desk", view: fixedView }: { mode?: "desk" | "student" | "faculty"; view?: View }) {
   const { state, save, allowed, user } = useApp();
-  const params = useSearchParams();
-  const requested = (params.get("view") as View | null) ?? "dashboard";
-  const [view, setView] = useState<View>(mode === "desk" ? requested : "catalog");
-  useEffect(() => {
-    if (mode === "desk" && requested) setView(requested);
-  }, [mode, requested]);
+  const router = useRouter();
+  const [view, setView] = useState<View>(fixedView ?? (mode === "desk" ? "dashboard" : "catalog"));
+  const shown = fixedView ?? view;
+  function openView(next: View) {
+    if (fixedView) {
+      router.push(next === "dashboard" ? "/library" : `/library/${next}`);
+      return;
+    }
+    setView(next);
+  }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rules, setRules] = useState<LibraryRules>(() => loadLibraryRules());
   const [reservations, setReservations] = useState<Reservation[]>(() => loadReservations());
@@ -144,17 +148,17 @@ export function LibraryDesk({ mode = "desk" }: { mode?: "desk" | "student" | "fa
 
   return (
     <div className="space-y-4">
-      {view === "dashboard" ? <Dashboard books={books} checkouts={state.checkouts} reservations={reservations} today={today} onJump={setView} /> : null}
-      {view === "catalog" ? (
+      {shown === "dashboard" ? <Dashboard books={books} checkouts={state.checkouts} reservations={reservations} today={today} onJump={openView} /> : null}
+      {shown === "catalog" || shown === "book" ? (
         <div className="space-y-3">
           <CatalogFilters query={query} setQuery={setQuery} resource={resource} setResource={setResource} onlyFree={onlyFree} setOnlyFree={setOnlyFree} />
           {canWrite ? <AddBook onSave={(book) => void save("books", book, `Saved book ${book.title}.`)} /> : null}
-          <BookList books={results} checkouts={state.checkouts} onOpen={(id) => { setSelectedId(id); setView("book"); }} />
+          <BookList books={results} checkouts={state.checkouts} onOpen={setSelectedId} />
+          {selected ? <BookDetail book={selected} checkouts={state.checkouts} canEdit={canWrite} onIssue={() => openView("circulation")} onReserve={() => openView("circulation")} /> : null}
         </div>
       ) : null}
-      {view === "book" && selected ? <BookDetail book={selected} checkouts={state.checkouts} canEdit={canWrite} onIssue={() => setView("circulation")} onReserve={() => setView("circulation")} /> : null}
-      {view === "members" ? <Members stateStudents={state.students} stateStaff={state.staff} checkouts={state.checkouts} reservations={reservations} today={today} canWrite={canWrite} onSaveStudent={(row) => void save("students", row, `Registered ${row.name}.`)} onSaveStaff={(row) => void save("staff", row, `Registered ${row.name}.`)} /> : null}
-      {view === "circulation" ? (
+      {shown === "members" ? <Members stateStudents={state.students} stateStaff={state.staff} checkouts={state.checkouts} reservations={reservations} today={today} canWrite={canWrite} onSaveStudent={(row) => void save("students", row, `Registered ${row.name}.`)} onSaveStaff={(row) => void save("staff", row, `Registered ${row.name}.`)} /> : null}
+      {shown === "circulation" ? (
         <Circulation
           books={books}
           students={state.students}
@@ -169,8 +173,8 @@ export function LibraryDesk({ mode = "desk" }: { mode?: "desk" | "student" | "fa
           onReserve={(book, member) => reserve(book, member)}
         />
       ) : null}
-      {view === "rules" ? <RulesEditor rules={rules} canWrite={canWrite} onSave={(next) => { setRules(next); saveLibraryRules(next); toast.success("Library rules saved."); }} /> : null}
-      {view === "reports" ? <Reports books={books} checkouts={state.checkouts} today={today} rules={rules} reservations={reservations} /> : null}
+      {shown === "rules" ? <RulesEditor rules={rules} canWrite={canWrite} onSave={(next) => { setRules(next); saveLibraryRules(next); toast.success("Library rules saved."); }} /> : null}
+      {shown === "reports" ? <Reports books={books} checkouts={state.checkouts} today={today} rules={rules} reservations={reservations} /> : null}
     </div>
   );
 }
