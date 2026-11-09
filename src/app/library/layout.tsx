@@ -9,6 +9,16 @@ import { BrandMark } from "@/components/brand-mark";
 import { LoadingState } from "@/components/empty-state";
 import { useApp } from "@/lib/app-context";
 import { portalHome } from "@/lib/portals";
+import { LibraryDesk } from "@/components/library/library-desk";
+
+function libraryView(pathname: string) {
+  if (pathname.startsWith("/library/catalog")) return "catalog" as const;
+  if (pathname.startsWith("/library/members")) return "members" as const;
+  if (pathname.startsWith("/library/circulation")) return "circulation" as const;
+  if (pathname.startsWith("/library/rules")) return "rules" as const;
+  if (pathname.startsWith("/library/reports")) return "reports" as const;
+  return "dashboard" as const;
+}
 
 const ITEMS = [
   { href: "/library", label: "Dashboard", icon: Library },
@@ -55,7 +65,7 @@ export default function LibrarianLayout({ children }: { children: ReactNode }) {
             const Icon = item.icon;
             const active = item.href === "/library" ? pathname === "/library" : pathname.startsWith(item.href);
             return (
-              <Link key={item.href} href={item.href} className={`flex min-h-9 items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657] hover:bg-[#f4f6f9]"}`}>
+              <Link key={item.href} href={item.href} prefetch={false} className={`flex min-h-9 items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657] hover:bg-[#f4f6f9]"}`}>
                 <Icon className="size-4" />
                 {item.label}
               </Link>
@@ -83,14 +93,17 @@ export default function LibrarianLayout({ children }: { children: ReactNode }) {
             {ITEMS.map((item) => {
               const active = item.href === "/library" ? pathname === "/library" : pathname.startsWith(item.href);
               return (
-                <Link key={item.href} href={item.href} className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657]"}`}>
+                <Link key={item.href} href={item.href} prefetch={false} className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657]"}`}>
                   {item.label}
                 </Link>
               );
             })}
           </nav>
         </header>
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="p-4 md:p-6">
+          <LibraryDesk mode="desk" view={libraryView(pathname)} />
+          {children}
+        </main>
       </div>
     </div>
   );
