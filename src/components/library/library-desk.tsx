@@ -266,6 +266,7 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
             books={books}
             checkouts={state.checkouts}
             students={state.students}
+            staff={state.staff}
             query={query}
             setQuery={setQuery}
             resource={resource}
@@ -515,6 +516,7 @@ function CatalogFinder(props: {
   books: Book[];
   checkouts: Checkout[];
   students: { id: string; name: string; rollNo: string }[];
+  staff: { id: string; name: string }[];
   query: string;
   setQuery: (value: string) => void;
   resource: string;
@@ -542,7 +544,7 @@ function CatalogFinder(props: {
         {[
           ["Total books", total],
           ["In library", inside],
-          ["Out with students", out],
+          ["Out with students and staff", out],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl bg-white p-4 ring-1 ring-[#e6e9ef]">
             <p className="text-xs font-semibold tracking-wide text-[#8b93a7] uppercase">{label}</p>
@@ -562,13 +564,40 @@ function CatalogFinder(props: {
         </select>
         {props.canWrite ? <Button type="button" onClick={() => props.setShowAdd(!props.showAdd)}>{props.showAdd ? "Close form" : "Add book"}</Button> : null}
       </div>
+      <p className="text-sm text-[#667085]">Students and staff may borrow up to 3 books. With more than 4 lakh titles, pick a letter or search, then move page by page.</p>
       <div className="flex flex-wrap gap-1">
         {letters.map((item) => (
           <button key={item} type="button" onClick={() => props.setLetter(item)} className={`h-8 min-w-8 rounded-md px-2 text-xs font-semibold ${props.letter === item ? "bg-[#0f3d68] text-white" : "bg-white text-[#3e4657] ring-1 ring-[#e6e9ef]"}`}>{item}</button>
         ))}
       </div>
-      <div className="space-y-3">
-        {props.rows.length === 0 ? <p className="rounded-2xl bg-white p-4 text-sm text-[#667085]">No books match.</p> : props.rows.map((book) => {
+      <CatalogPages rows={props.rows} books={props.books} query={props.query} letter={props.letter} checkouts={props.checkouts} students={props.students} staff={props.staff} canWrite={props.canWrite} onOpen={props.onOpen} onRemove={props.onRemove} />
+    </div>
+  );
+}
+
+function CatalogPages(props: {
+  rows: Book[];
+  books: Book[];
+  query: string;
+  letter: string;
+  checkouts: Checkout[];
+  students: { id: string; name: string; rollNo: string }[];
+  staff: { id: string; name: string }[];
+  canWrite: boolean;
+  onOpen: (id: string) => void;
+  onRemove: (book: Book) => void;
+}) {
+  const [page, setPage] = useState(0);
+  const huge = props.books.length > 200 && props.letter === "All" && props.query.trim().length < 2;
+  const pageSize = 20;
+  const pageCount = Math.max(1, Math.ceil(props.rows.length / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const slice = huge ? [] : props.rows.slice(safePage * pageSize, safePage * pageSize + pageSize);
+  return (
+    <div className="space-y-3">
+      {huge ? <p className="rounded-2xl bg-white p-4 text-sm text-[#667085]">This catalogue is too large to list at once. Search or choose a letter, then use Next.</p> : null}
+      {!huge && props.rows.length === 0 ? <p className="rounded-2xl bg-white p-4 text-sm text-[#667085]">No books match.</p> : null}
+      {slice.map((book) => {
           const loans = openLoans(props.checkouts).filter((row) => row.bookId === book.id);
           const free = Math.max(0, book.copies - loans.length);
           return (
@@ -585,18 +614,27 @@ function CatalogFinder(props: {
                 </div>
               </div>
               <p className="mt-2 text-sm text-[#1f2533]">Row {book.row || "—"} · Rack {book.rack || book.shelf || "—"}</p>
-              {loans.length === 0 ? <p className="mt-1 text-xs text-[#8b93a7]">No student has this book out.</p> : (
+              {loans.length === 0 ? <p className="mt-1 text-xs text-[#8b93a7]">No student or staff member has this book out.</p> : (
                 <ul className="mt-2 space-y-1 text-xs text-[#3e4657]">
                   {loans.map((loan) => {
                     const student = props.students.find((row) => row.id === loan.studentId);
-                    return <li key={loan.id}>{student?.name ?? "Member"}{student?.rollNo ? ` · ${student.rollNo}` : ""} · out {loan.issuedOn} · due {loan.dueOn}</li>;
+                    const staffMember = props.staff.find((row) => row.id === loan.staffId);
+                    const who = student?.name ?? staffMember?.name ?? "Member";
+                    const code = student?.rollNo ? ` · ${student.rollNo}` : "";
+                    return <li key={loan.id}>{who}{code} · out {loan.issuedOn} · due {loan.dueOn}</li>;
                   })}
                 </ul>
               )}
             </article>
           );
         })}
-      </div>
+      {!huge && pageCount > 1 ? (
+        <div className="flex items-center justify-between gap-3">
+          <Button type="button" variant="outline" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>Previous</Button>
+          <p className="text-sm text-[#667085]">Page {safePage + 1} of {pageCount}</p>
+          <Button type="button" variant="outline" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>Next</Button>
+        </div>
+      ) : null}
     </div>
   );
 }

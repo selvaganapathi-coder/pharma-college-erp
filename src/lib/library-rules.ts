@@ -44,7 +44,7 @@ export type Activity = { id: string; at: string; actor: string; action: string }
 
 export const DEFAULT_LIBRARY_RULES: LibraryRules = {
   studentLimit: 3,
-  facultyLimit: 5,
+  facultyLimit: 3,
   studentDays: 14,
   facultyDays: 30,
   maxRenewals: 1,
@@ -64,7 +64,8 @@ export function loadLibraryRules(): LibraryRules {
   if (typeof window === "undefined") return DEFAULT_LIBRARY_RULES;
   try {
     const raw = localStorage.getItem(RULES_KEY);
-    return raw ? { ...DEFAULT_LIBRARY_RULES, ...JSON.parse(raw) } : DEFAULT_LIBRARY_RULES;
+    const saved = raw ? { ...DEFAULT_LIBRARY_RULES, ...JSON.parse(raw) } : DEFAULT_LIBRARY_RULES;
+    return { ...saved, studentLimit: Math.min(saved.studentLimit, 3), facultyLimit: Math.min(saved.facultyLimit, 3) };
   } catch {
     return DEFAULT_LIBRARY_RULES;
   }
@@ -241,7 +242,7 @@ export function canIssue(input: {
   }
   const limit = kind === "faculty" ? rules.facultyLimit : rules.studentLimit;
   if (mine.length >= limit) {
-    return { ok: false as const, error: `This member already has ${limit} books out.` };
+    return { ok: false as const, error: `Students and staff can take only ${limit} books.` };
   }
   return { ok: true as const, dueOn: addDays(today, loanDays(rules, kind)), barcode };
 }
