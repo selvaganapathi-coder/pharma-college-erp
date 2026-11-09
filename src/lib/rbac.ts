@@ -12,7 +12,7 @@ export const PERMISSIONS = {
   messages: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff"] },
   reports: { read: ["admin"], write: ["admin"] },
   transport: { read: ["admin"], write: ["admin"] },
-  library: { read: ["admin", "staff", "student", "parent"], write: ["admin"] },
+  library: { read: ["admin", "staff", "student", "parent", "librarian"], write: ["admin", "librarian"] },
   audit: { read: ["admin"], write: ["admin"] },
   settings: { read: ["admin"], write: ["admin"] },
   profile: { read: ["admin", "staff", "student", "parent"], write: ["admin", "staff", "student", "parent"] },
@@ -20,13 +20,14 @@ export const PERMISSIONS = {
 
 export type ModuleKey = keyof typeof PERMISSIONS;
 
-export function can(role: "admin" | "staff" | "student" | "parent", module: ModuleKey, action: "read" | "write") {
+export function can(role: "admin" | "staff" | "student" | "parent" | "librarian", module: ModuleKey, action: "read" | "write") {
   return (PERMISSIONS[module][action] as readonly string[]).includes(role);
 }
 
-export function roleLabel(role: "admin" | "staff" | "student" | "parent") {
+export function roleLabel(role: "admin" | "staff" | "student" | "parent" | "librarian") {
   if (role === "admin") return "Admin";
   if (role === "staff") return "Staff";
   if (role === "student") return "Student";
+  if (role === "librarian") return "Librarian";
   return "Parent";
 }

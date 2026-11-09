@@ -1,4 +1,4 @@
-export type Role = "admin" | "staff" | "student" | "parent";
+export type Role = "admin" | "staff" | "student" | "parent" | "librarian";
 export type Channel = "whatsapp" | "sms" | "email" | "inapp";
 export type Status = "active" | "left";
 

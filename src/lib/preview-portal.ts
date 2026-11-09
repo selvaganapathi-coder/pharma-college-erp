@@ -14,7 +14,7 @@ const studentId = "preview-student";
 const staffRecordId = "preview-staff-record";
 
 export function isPreviewRole(value: string | null): value is Role {
-  return value === "admin" || value === "staff" || value === "student" || value === "parent";
+  return value === "admin" || value === "staff" || value === "student" || value === "parent" || value === "librarian";
 }
 
 export function readPreviewRole(): Role | null {
@@ -53,6 +53,14 @@ export function previewBundle(role: Role): { user: User; state: AppState } {
       phone: "",
       active: true,
       childStudentId: studentId,
+    },
+    librarian: {
+      id: "preview-librarian",
+      email: "preview-librarian@college.local",
+      name: "College Librarian",
+      role: "librarian",
+      phone: "",
+      active: true,
     },
   };
   const user = users[role];

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { GraduationCap, Shield, UserRound, Users } from "lucide-react";
+import { BookOpen, GraduationCap, Shield, UserRound, Users } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { useApp } from "@/lib/app-context";
 import { portalHome } from "@/lib/portals";
@@ -15,6 +15,7 @@ const ENTRIES: { role: Role; label: string; note: string; icon: typeof Shield }[
   { role: "staff", label: "Staff", note: "Classes and attendance", icon: Users },
   { role: "student", label: "Student", note: "Classes, fees, and notices", icon: GraduationCap },
   { role: "parent", label: "Parent", note: "Your child's portal", icon: UserRound },
+  { role: "librarian", label: "Librarian", note: "Catalogue, issue, and return", icon: BookOpen },
 ];
 
 export default function LoginPage() {
@@ -46,7 +47,7 @@ export default function LoginPage() {
                   key={item.role}
                   type="button"
                   onClick={() => enter(item.role)}
-                  className="flex min-h-28 flex-col items-start justify-between rounded-2xl border border-border bg-background px-4 py-3 text-left transition hover:border-primary hover:bg-primary hover:text-white"
+                  className={`flex min-h-28 flex-col items-start justify-between rounded-2xl border border-border bg-background px-4 py-3 text-left transition hover:border-primary hover:bg-primary hover:text-white ${item.role === "librarian" ? "col-span-2" : ""}`}
                 >
                   <Icon className="size-5" />
                   <span>
