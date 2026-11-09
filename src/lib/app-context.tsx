@@ -42,6 +42,7 @@ import {
   setupDocExists,
 } from "@/lib/firebase";
 import { profileGate, signInAndOpen, withTimeout } from "@/lib/session-gate";
+import { PREVIEW_ROLE_KEY, previewBundle, readPreviewRole } from "@/lib/preview-portal";
 
 type AppContextValue = {
   ready: boolean;
@@ -54,6 +55,7 @@ type AppContextValue = {
   firebaseNote: string | null;
   needsSetup: boolean;
   catalogPending: boolean;
+  openPortal: (role: Role) => void;
   login: (email: string, password: string) => Promise<{ error: string | null; role?: Role }>;
   registerAdmin: (input: { name: string; email: string; password: string; phone: string }) => Promise<string | null>;
   logout: () => void;
@@ -229,6 +231,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setUserId(null);
         const fb = getFirebase();
         if (!fb) {
+          const preview = readPreviewRole();
+          if (preview) {
+            const bundle = previewBundle(preview);
+            setUserId(bundle.user.id);
+            setState(bundle.state);
+          }
           setSyncStatus("offline");
           setReady(true);
           return;
@@ -236,6 +244,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await withTimeout(fb.auth.authStateReady(), 4000, "Signed-in session took too long to restore.").catch(() => undefined);
         if (!alive) return;
         if (fb.auth.currentUser) await sessionFromAuth();
+        else {
+          const preview = readPreviewRole();
+          if (preview) {
+            const bundle = previewBundle(preview);
+            setUserId(bundle.user.id);
+            setState(bundle.state);
+            setSyncStatus("offline");
+          }
+        }
         unsubAuth = onAuthStateChanged(fb.auth, (fbUser) => {
           if (!alive) return;
           if (!fbUser) {
@@ -347,6 +364,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [archive, audit, state],
   );
 
+  const openPortal = useCallback((role: Role) => {
+    sessionStorage.setItem(PREVIEW_ROLE_KEY, role);
+    const bundle = previewBundle(role);
+    cancelSync.current();
+    setUserId(bundle.user.id);
+    setState(bundle.state);
+    setCatalogPending(false);
+    setSyncStatus("offline");
+    setSyncError(null);
+    setFirebaseNote(null);
+  }, []);
+
   const login = useCallback(
     async (email: string, password: string) => {
       const address = email.trim().toLowerCase();
@@ -416,6 +445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(EMPTY_STATE);
     setCatalogPending(false);
     saveSession(null);
+    sessionStorage.removeItem(PREVIEW_ROLE_KEY);
     setFirebaseNote(null);
     setDataOwner(null);
     if (id) void wipeOwnerData(id);
@@ -536,6 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       firebaseNote,
       needsSetup,
       catalogPending,
+      openPortal,
       login,
       registerAdmin,
       logout,
@@ -560,6 +591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       firebaseNote,
       needsSetup,
       catalogPending,
+      openPortal,
       login,
       registerAdmin,
       logout,

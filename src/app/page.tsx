@@ -1,93 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { GraduationCap, Shield, UserRound, Users } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { useApp } from "@/lib/app-context";
-import { firebaseResetPassword } from "@/lib/firebase";
-import { accessDeniedMessage, loginPortalMatchesRole, portalHome, type LoginPortal } from "@/lib/portals";
+import { portalHome } from "@/lib/portals";
 import { COLLEGE_NAME, COLLEGE_TAGLINE } from "@/lib/brand";
+import type { Role } from "@/lib/types";
 
-const PORTALS: { id: LoginPortal; label: string }[] = [
-  { id: "office", label: "Admin / Staff" },
-  { id: "student", label: "Student" },
-  { id: "parent", label: "Parent" },
+const ENTRIES: { role: Role; label: string; note: string; icon: typeof Shield }[] = [
+  { role: "admin", label: "Admin", note: "Office dashboard", icon: Shield },
+  { role: "staff", label: "Staff", note: "Classes and attendance", icon: Users },
+  { role: "student", label: "Student", note: "Classes, fees, and notices", icon: GraduationCap },
+  { role: "parent", label: "Parent", note: "Your child's portal", icon: UserRound },
 ];
 
 export default function LoginPage() {
-  const { ready, user, login } = useApp();
+  const { ready, user, openPortal } = useApp();
   const router = useRouter();
-  const [portal, setPortal] = useState<LoginPortal>("office");
-  const [email, setEmail] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("gp-login-email") ?? ""));
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [remember, setRemember] = useState(true);
-  const [resetNote, setResetNote] = useState<string | null>(null);
-  const [resetBusy, setResetBusy] = useState(false);
 
   useEffect(() => {
     if (ready && user) router.replace(portalHome(user.role));
   }, [ready, user, router]);
 
-  async function requestReset() {
-    const address = email.trim().toLowerCase();
-    if (!address) {
-      setResetNote(null);
-      setError("Enter your email first, then request a reset.");
-      return;
-    }
-    setResetBusy(true);
-    setError(null);
-    setResetNote(null);
-    try {
-      const res = await fetch("/api/auth/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: address }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; note?: string; transport?: string };
-      if (!res.ok || data.ok === false) {
-        setError(data.note ?? "Could not send the reset email.");
-        return;
-      }
-      if (data.transport === "resend") {
-        setResetNote(data.note ?? "If that email has a login, a reset message is on its way.");
-        return;
-      }
-      const out = await firebaseResetPassword(address);
-      if (out.ok) setResetNote(out.note);
-      else setError(out.note);
-    } catch {
-      setError("Could not reach the reset service. Try again.");
-    } finally {
-      setResetBusy(false);
-    }
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setResetNote(null);
-    const result = await login(email, password);
-    setBusy(false);
-    if (result.error) setError(result.error);
-    else {
-      if (remember) localStorage.setItem("gp-login-email", email.trim().toLowerCase());
-      else localStorage.removeItem("gp-login-email");
-      const role = result.role ?? user?.role;
-      if (role && !loginPortalMatchesRole(portal, role)) {
-        setError(accessDeniedMessage(role));
-      }
-      if (role) router.replace(portalHome(role));
-    }
+  function enter(role: Role) {
+    openPortal(role);
+    router.replace(portalHome(role));
   }
 
   return (
@@ -95,93 +35,28 @@ export default function LoginPage() {
       <section className="order-2 flex items-center justify-center px-4 py-8 md:order-1 md:py-12">
         <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-5 shadow-[0_18px_50px_rgba(90,20,16,0.08)] sm:p-8">
           <BrandMark size="lg" />
-        <h1 className="mt-5 text-[22px] font-semibold tracking-tight text-primary sm:mt-7 sm:text-3xl">Welcome Back</h1>
+          <h1 className="mt-5 text-[22px] font-semibold tracking-tight text-primary sm:mt-7 sm:text-3xl">Welcome Back</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to your account</p>
-          <div className="mt-5 grid grid-cols-3 rounded-full bg-muted p-1 text-[11px] font-semibold sm:text-xs">
-            {PORTALS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setPortal(item.id)}
-                className={`min-h-10 rounded-full px-1 py-2 sm:px-2 ${
-                  portal === item.id ? "bg-primary text-white shadow-sm" : "text-muted-foreground"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <form onSubmit={submit} className="mt-6 space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="email">Email / ID</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="username"
-                className="h-11 rounded-xl"
-                placeholder="you@college.edu"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={1}
-                  autoComplete="current-password"
-                  className="h-11 rounded-xl pr-11"
-                />
+          <p className="mt-4 text-sm text-muted-foreground">Choose a portal. No email or password is needed for now.</p>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            {ENTRIES.map((item) => {
+              const Icon = item.icon;
+              return (
                 <button
+                  key={item.role}
                   type="button"
-                  className="absolute top-1/2 right-2 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground hover:text-primary"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => enter(item.role)}
+                  className="flex min-h-28 flex-col items-start justify-between rounded-2xl border border-border bg-background px-4 py-3 text-left transition hover:border-primary hover:bg-primary hover:text-white"
                 >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  <Icon className="size-5" />
+                  <span>
+                    <span className="block text-base font-semibold">{item.label}</span>
+                    <span className="mt-0.5 block text-xs opacity-80">{item.note}</span>
+                  </span>
                 </button>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <label className="flex items-center gap-2 text-muted-foreground">
-                <Checkbox checked={remember} onCheckedChange={(v) => setRemember(Boolean(v))} /> Remember me
-              </label>
-              <button
-                type="button"
-                className="font-medium text-primary"
-                disabled={resetBusy}
-                onClick={() => void requestReset()}
-              >
-                {resetBusy ? "Sending…" : "Forgot password?"}
-              </button>
-            </div>
-            {error ? (
-              <p className="text-sm whitespace-pre-line text-primary" role="alert">
-                {error}
-              </p>
-            ) : null}
-            {resetNote ? (
-              <p className="rounded-xl border border-border bg-muted px-3 py-2 text-sm text-foreground" role="status">
-                {resetNote}
-              </p>
-            ) : null}
-            <Button type="submit" disabled={busy || resetBusy} className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-white hover:bg-[#8f1c14]">
-              {busy ? "Please wait…" : "Sign In"}
-            </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              {portal === "student"
-                ? "Use the student email issued by the college office."
-                : portal === "parent"
-                  ? "Use the parent email recorded on the student file."
-                  : "Use the office account issued to you."}
-            </p>
-          </form>
+              );
+            })}
+          </div>
         </div>
       </section>
       <aside className="relative order-1 h-[148px] overflow-hidden sm:h-[180px] md:order-2 md:h-auto md:min-h-dvh">

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { accessDeniedMessage, loginPortalMatchesRole, portalForRole, portalHome } from "@/lib/portals";
+import { previewBundle } from "@/lib/preview-portal";
 import { normalizeTimetableSlot, findTimetableConflicts, slotTimes } from "@/lib/schedule";
 import { linkedStudentIds, staffTeaching } from "@/lib/scope";
 import { mergeCloud } from "@/lib/sync";
@@ -36,6 +37,14 @@ describe("portals", () => {
     expect(src).toContain("Welcome Back");
     expect(src).toContain("Sign in to your account");
     expect(src).toContain("/images/login/pharmacy-campus.jpg");
+    expect(src).toContain("openPortal");
+  });
+  it("opens each portal from a local preview user", () => {
+    expect(previewBundle("admin").user.role).toBe("admin");
+    expect(previewBundle("staff").user.staffId).toBe("preview-staff-record");
+    expect(previewBundle("student").user.studentId).toBe("preview-student");
+    expect(previewBundle("parent").user.childStudentId).toBe("preview-student");
+    expect(previewBundle("student").state.courses[0]?.name).toBe("B.Pharm");
   });
   it("rejects a student using the office login tab", () => {
     expect(loginPortalMatchesRole("office", "student")).toBe(false);
