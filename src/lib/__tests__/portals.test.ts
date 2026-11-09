@@ -30,6 +30,7 @@ describe("portals", () => {
     expect(portalHome("student")).toBe("/student");
     expect(portalHome("parent")).toBe("/parent");
     expect(portalHome("librarian")).toBe("/library");
+    expect(portalHome("faculty")).toBe("/faculty");
     expect(portalForRole("admin")).toBe("admin");
   });
   it("does not expose public registration on the login page", () => {

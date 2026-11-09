@@ -14,7 +14,7 @@ const studentId = "preview-student";
 const staffRecordId = "preview-staff-record";
 
 export function isPreviewRole(value: string | null): value is Role {
-  return value === "admin" || value === "staff" || value === "student" || value === "parent" || value === "librarian";
+  return value === "admin" || value === "staff" || value === "student" || value === "parent" || value === "librarian" || value === "faculty";
 }
 
 export function readPreviewRole(): Role | null {
@@ -61,6 +61,15 @@ export function previewBundle(role: Role): { user: User; state: AppState } {
       role: "librarian",
       phone: "",
       active: true,
+    },
+    faculty: {
+      id: "preview-faculty-user",
+      email: "preview-faculty@college.local",
+      name: "College Faculty",
+      role: "faculty",
+      phone: "",
+      active: true,
+      staffId: staffRecordId,
     },
   };
   const user = users[role];
@@ -130,7 +139,7 @@ export function previewBundle(role: Role): { user: User; state: AppState } {
         { id: "preview-book-chem", isbn: "9780000000028", title: "Pharmaceutical Chemistry", author: "Beckett", copies: 2, subject: "Pharmaceutical Chemistry" },
         { id: "preview-book-cology", isbn: "9780000000035", title: "Essentials of Pharmacology", author: "Tripathi", copies: 2, subject: "Pharmacology" },
         { id: "preview-book-cognosy", isbn: "9780000000042", title: "Pharmacognosy", author: "Kokate", copies: 1, subject: "Pharmacognosy" },
-        { id: "preview-book-practice", isbn: "9780000000059", title: "Pharmacy Practice", author: "Tipnis", copies: 2, subject: "Pharmacy Practice" },
+        { id: "preview-book-practice", isbn: "9780000000059", title: "Pharmacy Practice", author: "Tipnis", copies: 1, subject: "Pharmacy Practice", resourceType: "Reference", callNumber: "RS 100", shelf: "Reference", edition: "1st" },
       ],
       staff: [
         {

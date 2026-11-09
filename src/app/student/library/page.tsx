@@ -1,5 +1,12 @@
 "use client";
-import { LinkedLibraryPage } from "@/components/portal/linked-pages";
+
+import { Suspense } from "react";
+import { LibraryDesk } from "@/components/library/library-desk";
+
 export default function Page() {
-  return <LinkedLibraryPage />;
+  return (
+    <Suspense fallback={null}>
+      <LibraryDesk mode="student" />
+    </Suspense>
+  );
 }

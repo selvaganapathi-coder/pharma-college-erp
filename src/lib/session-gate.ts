@@ -26,7 +26,7 @@ export function profileGate(profile: User | null): { ok: true; role: Role } | { 
   if (profile.role === "parent" && !profile.childStudentId && !(profile.studentIds && profile.studentIds.length)) {
     return { ok: false, error: "This login is not linked to a student record." };
   }
-  if (profile.role !== "admin" && profile.role !== "staff" && profile.role !== "student" && profile.role !== "parent" && profile.role !== "librarian") {
+  if (profile.role !== "admin" && profile.role !== "staff" && profile.role !== "student" && profile.role !== "parent" && profile.role !== "librarian" && profile.role !== "faculty") {
     return { ok: false, error: "This login has no portal role. Ask the office to set one." };
   }
   return { ok: true, role: profile.role };

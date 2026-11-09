@@ -1,4 +1,4 @@
-export type Role = "admin" | "staff" | "student" | "parent" | "librarian";
+export type Role = "admin" | "staff" | "student" | "parent" | "librarian" | "faculty";
 export type Channel = "whatsapp" | "sms" | "email" | "inapp";
 export type Status = "active" | "left";
 
@@ -232,6 +232,12 @@ export type Book = {
   copies: number;
   /** Pharmacy shelf, such as Pharmacology. */
   subject?: string;
+  edition?: string;
+  resourceType?: "Book" | "Journal" | "Reference" | "Rare";
+  callNumber?: string;
+  shelf?: string;
+  course?: string;
+  semester?: string;
   photoUrl?: string;
   deletedAt?: string;
 };
@@ -244,6 +250,9 @@ export type Checkout = {
   dueOn: string;
   returnedOn?: string;
   fine?: number;
+  staffId?: string;
+  renewals?: number;
+  barcode?: string;
 };
 
 export type AuditLog = {

@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { BookOpen, GraduationCap, Shield, UserRound, Users } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/app-context";
+import { firebaseResetPassword } from "@/lib/firebase";
 import { portalHome } from "@/lib/portals";
 import { COLLEGE_NAME, COLLEGE_TAGLINE } from "@/lib/brand";
 import type { Role } from "@/lib/types";
@@ -15,12 +19,18 @@ const ENTRIES: { role: Role; label: string; note: string; icon: typeof Shield }[
   { role: "staff", label: "Staff", note: "Classes and attendance", icon: Users },
   { role: "student", label: "Student", note: "Classes, fees, and notices", icon: GraduationCap },
   { role: "parent", label: "Parent", note: "Your child's portal", icon: UserRound },
-  { role: "librarian", label: "Librarian", note: "Catalogue, issue, and return", icon: BookOpen },
+  { role: "librarian", label: "Librarian", note: "Loans, returns, and reports", icon: BookOpen },
+  { role: "faculty", label: "Faculty", note: "Catalog and your loans", icon: Users },
 ];
 
 export default function LoginPage() {
-  const { ready, user, openPortal } = useApp();
+  const { ready, user, openPortal, login } = useApp();
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (ready && user) router.replace(portalHome(user.role));
@@ -31,6 +41,29 @@ export default function LoginPage() {
     router.replace(portalHome(role));
   }
 
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    const result = await login(email, password);
+    setBusy(false);
+    if (result.error) setError(result.error);
+  }
+
+  async function forgot() {
+    const address = email.trim();
+    if (!address) {
+      setError("Enter your college ID or email first.");
+      setNote(null);
+      return;
+    }
+    setError(null);
+    const result = await firebaseResetPassword(address);
+    if (result.ok) setNote(result.note);
+    else setError(result.note);
+  }
+
   return (
     <div className="grid min-h-dvh bg-background md:grid-cols-[minmax(0,1fr)_minmax(220px,0.72fr)] lg:grid-cols-2">
       <section className="order-2 flex items-center justify-center px-4 py-8 md:order-1 md:py-12">
@@ -38,7 +71,21 @@ export default function LoginPage() {
           <BrandMark size="lg" />
           <h1 className="mt-5 text-[22px] font-semibold tracking-tight text-primary sm:mt-7 sm:text-3xl">Welcome Back</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to your account</p>
-          <p className="mt-4 text-sm text-muted-foreground">Choose a portal. No email or password is needed for now.</p>
+          <form onSubmit={(event) => void submit(event)} className="mt-5 space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="college-id">Username or college ID</Label>
+              <Input id="college-id" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+            </div>
+            <button type="button" className="text-sm font-medium text-primary" onClick={() => void forgot()}>Forgot password</button>
+            {error ? <p className="text-sm text-primary" role="alert">{error}</p> : null}
+            {note ? <p className="text-sm text-[#067647]" role="status">{note}</p> : null}
+            <Button type="submit" disabled={busy} className="h-11 w-full">{busy ? "Signing in…" : "Sign in"}</Button>
+          </form>
+          <p className="mt-4 text-sm text-muted-foreground">Or open a role directly. The librarian creates student and faculty accounts for this release.</p>
           <div className="mt-5 grid grid-cols-2 gap-3">
             {ENTRIES.map((item) => {
               const Icon = item.icon;

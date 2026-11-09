@@ -1,6 +1,6 @@
 import type { Role } from "./types";
 
-export type PortalId = "admin" | "staff" | "student" | "parent" | "librarian";
+export type PortalId = "admin" | "staff" | "student" | "parent" | "librarian" | "faculty";
 export type LoginPortal = "office" | "student" | "parent";
 
 export function portalForRole(role: Role): PortalId {
@@ -8,6 +8,7 @@ export function portalForRole(role: Role): PortalId {
   if (role === "staff") return "staff";
   if (role === "student") return "student";
   if (role === "librarian") return "librarian";
+  if (role === "faculty") return "faculty";
   return "parent";
 }
 
@@ -15,6 +16,7 @@ export function portalHome(role: Role) {
   const portal = portalForRole(role);
   if (portal === "admin") return "/app";
   if (portal === "librarian") return "/library";
+  if (portal === "faculty") return "/faculty";
   return `/${portal}`;
 }
 
@@ -23,6 +25,7 @@ export function portalLabel(portal: PortalId) {
   if (portal === "staff") return "Staff Portal";
   if (portal === "student") return "Student Portal";
   if (portal === "librarian") return "Librarian Portal";
+  if (portal === "faculty") return "Faculty Portal";
   return "Parent Portal";
 }
 
@@ -41,6 +44,7 @@ export function pathPortal(pathname: string): PortalId | null {
   if (pathname === "/student" || pathname.startsWith("/student/")) return "student";
   if (pathname === "/parent" || pathname.startsWith("/parent/")) return "parent";
   if (pathname === "/library" || pathname.startsWith("/library/")) return "librarian";
+  if (pathname === "/faculty" || pathname.startsWith("/faculty/")) return "faculty";
   return null;
 }
 
