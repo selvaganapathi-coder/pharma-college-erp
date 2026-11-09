@@ -300,10 +300,15 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
             setDeskFocus("return");
             openView("circulation");
           }}
+          onAdd={() => {
+            setShowAdd(true);
+            openView("catalog");
+          }}
         />
       ) : null}
       {shown === "catalog" || shown === "book" ? (
         <div className="space-y-4">
+          {canWrite && showAdd ? <AddBook books={books} onSave={(book) => { void save("books", book, `Saved book ${book.title}.`); recordActivity(user?.name ?? "Librarian", `Added ${book.title}.`); toast.success(`${book.title} added.`); setShowAdd(false); }} /> : null}
           <CatalogFinder
             books={books}
             checkouts={state.checkouts}
@@ -323,13 +328,17 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
             showAdd={showAdd}
             setShowAdd={setShowAdd}
             onRemove={(book) => {
+              if (openLoans(state.checkouts).some((loan) => loan.bookId === book.id)) {
+                toast.error("Return every copy before removing this book.");
+                return;
+              }
               void save("books", { ...book, deletedAt: new Date().toISOString() }, `Removed ${book.title}.`);
               recordActivity(user?.name ?? "Librarian", `Removed ${book.title}.`);
+              toast.success(`${book.title} removed.`);
             }}
             rows={results}
             onOpen={setSelectedId}
           />
-          {canWrite && showAdd ? <AddBook books={books} onSave={(book) => { void save("books", book, `Saved book ${book.title}.`); setShowAdd(false); }} /> : null}
           {selected ? (
             <BookDetail
               book={selected}
@@ -394,6 +403,7 @@ function Dashboard({
   onViewLoan,
   onIssue,
   onReturn,
+  onAdd,
   rules,
   receipt,
 }: {
@@ -410,6 +420,7 @@ function Dashboard({
   onViewLoan: (id: string) => void;
   onIssue: () => void;
   onReturn: () => void;
+  onAdd: () => void;
   rules: LibraryRules;
   receipt: string | null;
 }) {
@@ -448,10 +459,10 @@ function Dashboard({
     { label: "Overdue", value: overdue.length, view: "reports", hint: "Ask for these back", icon: AlertCircle, wash: "bg-[#fdecec]", ink: "text-[#d92d20]" },
     { label: "Pickup needed", value: pickups.length, view: "circulation", hint: "Ready for a member", icon: BookPlus, wash: "bg-[#fff6e8]", ink: "text-[#b54708]" },
   ];
-  const actions: { label: string; note: string; view: View | "issue" | "return"; icon: typeof Package; primary?: boolean }[] = [
+  const actions: { label: string; note: string; view: View | "issue" | "return" | "add"; icon: typeof Package; primary?: boolean }[] = [
     { label: "Issue a book", note: "Scan a barcode", view: "issue", icon: BookMarked, primary: true },
     { label: "Return a book", note: "Close a loan", view: "return", icon: RotateCcw },
-    { label: "Add a book", note: "New title", view: "catalog", icon: BookPlus },
+    { label: "Add a book", note: "New title", view: "add", icon: BookPlus },
     { label: "Register a member", note: "Student or faculty", view: "members", icon: UserPlus },
   ];
   return (
@@ -491,7 +502,7 @@ function Dashboard({
             {actions.map((action) => {
               const Icon = action.icon;
               return (
-                <button key={action.label} type="button" onClick={() => action.view === "issue" ? onIssue() : action.view === "return" ? onReturn() : onJump(action.view)} className={`flex min-h-24 flex-col justify-between rounded-2xl p-3 text-left ${action.primary ? "bg-[#0f3d68] text-white" : "bg-[#f4f7fb] text-[#0f3d68]"}`}>
+                <button key={action.label} type="button" onClick={() => action.view === "issue" ? onIssue() : action.view === "return" ? onReturn() : action.view === "add" ? onAdd() : onJump(action.view)} className={`flex min-h-24 flex-col justify-between rounded-2xl p-3 text-left ${action.primary ? "bg-[#0f3d68] text-white" : "bg-[#f4f7fb] text-[#0f3d68]"}`}>
                   <Icon className="size-5" />
                   <span>
                     <span className="block text-sm font-semibold">{action.label}</span>
@@ -657,6 +668,7 @@ function CatalogPages(props: {
   onRemove: (book: Book) => void;
 }) {
   const [page, setPage] = useState(0);
+  const [picked, setPicked] = useState<string[]>([]);
   const huge = props.books.length > 200 && props.letter === "All" && props.query.trim().length < 2;
   const pageSize = 20;
   const pageCount = Math.max(1, Math.ceil(props.rows.length / pageSize));
@@ -666,6 +678,7 @@ function CatalogPages(props: {
     <div className="space-y-3">
       {huge ? <p className="rounded-2xl bg-white p-4 text-sm text-[#667085]">This catalogue is too large to list at once. Search or choose a letter, then use Next.</p> : null}
       {!huge && props.rows.length === 0 ? <p className="rounded-2xl bg-white p-4 text-sm text-[#667085]">No books match.</p> : null}
+      {props.canWrite && picked.length > 0 ? <Button type="button" variant="outline" onClick={() => { picked.forEach((id) => { const book = props.rows.find((item) => item.id === id); if (book) props.onRemove(book); }); setPicked([]); }}>Remove {picked.length} selected</Button> : null}
       {slice.map((book) => {
           const loans = openLoans(props.checkouts).filter((row) => row.bookId === book.id);
           const free = Math.max(0, book.copies - loans.length);
@@ -676,7 +689,8 @@ function CatalogPages(props: {
                   <p className="text-base font-semibold text-[#0f3d68]">{book.title}</p>
                   <p className="text-sm text-[#667085]">{book.author} · {book.subject} · {book.resourceType ?? "Book"}</p>
                 </button>
-                <div className="flex gap-2 text-xs font-semibold">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  {props.canWrite ? <input type="checkbox" checked={picked.includes(book.id)} onChange={(event) => setPicked((current) => event.target.checked ? [...current, book.id] : current.filter((id) => id !== book.id))} aria-label={`Select ${book.title}`} /> : null}
                   <span className="rounded-full bg-[#e8f7ee] px-2 py-1 text-[#067647]">In {free}</span>
                   <span className="rounded-full bg-[#e7f0ff] px-2 py-1 text-[#0f3d68]">Out {loans.length}</span>
                   {props.canWrite ? <Button size="sm" variant="outline" onClick={() => props.onRemove(book)}>Remove</Button> : null}
@@ -833,6 +847,8 @@ function AddBook({ books, onSave }: { books: Book[]; onSave: (book: Book) => voi
   const [resourceType, setResourceType] = useState<Book["resourceType"]>("Textbook");
   const [course, setCourse] = useState("");
   const [link, setLink] = useState("");
+  const [row, setRow] = useState("1");
+  const [rack, setRack] = useState("A");
   return (
     <form
       className="grid gap-2 rounded-lg border border-[#e6e9ef] bg-white p-3 sm:grid-cols-3"
@@ -857,7 +873,9 @@ function AddBook({ books, onSave }: { books: Book[]; onSave: (book: Book) => voi
           keywords: subject,
           copies,
           resourceType,
-          shelf: subject,
+          shelf: `Row ${row} · Rack ${rack}`,
+          row,
+          rack,
           edition,
           year,
           publisher: "",
@@ -886,6 +904,8 @@ function AddBook({ books, onSave }: { books: Book[]; onSave: (book: Book) => voi
         {["Textbook", "Reference", "Journal", "E-book", "Pharmacopoeia", "Other"].map((item) => <option key={item}>{item}</option>)}
       </select>
       <Input type="number" min={1} value={copies} onChange={(event) => setCopies(Number(event.target.value))} />
+      <Input value={row} onChange={(event) => setRow(event.target.value)} placeholder="Row" />
+      <Input value={rack} onChange={(event) => setRack(event.target.value)} placeholder="Rack" />
       <Input className="sm:col-span-2" value={link} onChange={(event) => setLink(event.target.value)} placeholder="Licensed digital link, if the college subscribes" />
       <Button type="submit">Save title and copies</Button>
     </form>
