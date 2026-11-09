@@ -204,7 +204,18 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
           ))}
         </div>
       ) : null}
-      {shown === "dashboard" ? <Dashboard books={books} checkouts={state.checkouts} reservations={reservations} today={today} onJump={openView} /> : null}
+      {shown === "dashboard" ? (
+        <Dashboard
+          books={books}
+          checkouts={state.checkouts}
+          reservations={reservations}
+          students={state.students}
+          staff={state.staff}
+          today={today}
+          name={user?.name ?? "Librarian"}
+          onJump={openView}
+        />
+      ) : null}
       {shown === "catalog" || shown === "book" ? (
         <div className="space-y-3">
           <CatalogFilters query={query} setQuery={setQuery} resource={resource} setResource={setResource} onlyFree={onlyFree} setOnlyFree={setOnlyFree} />
@@ -240,42 +251,94 @@ function Dashboard({
   books,
   checkouts,
   reservations,
+  students,
+  staff,
   today,
+  name,
   onJump,
 }: {
   books: Book[];
   checkouts: Checkout[];
   reservations: Reservation[];
+  students: { id: string; name: string }[];
+  staff: { id: string; name: string }[];
   today: string;
+  name: string;
   onJump: (view: View) => void;
 }) {
   const loans = openLoans(checkouts);
   const copies = books.reduce((sum, book) => sum + book.copies, 0);
   const available = books.reduce((sum, book) => sum + availableBarcodes(book, checkouts).length, 0);
+  const overdue = loans.filter((row) => isOverdue(row, today));
+  const waiting = reservations.filter((row) => row.status === "waiting" || row.status === "ready");
   const cards = [
-    ["Titles", books.length],
-    ["Physical copies", copies],
-    ["Available", available],
-    ["On loan", loans.length],
-    ["Overdue", loans.filter((row) => isOverdue(row, today)).length],
-    ["Reservations", reservations.filter((row) => row.status !== "ready").length + reservations.filter((row) => row.status === "ready").length],
+    ["Titles", books.length, "catalog"],
+    ["Copies", copies, "catalog"],
+    ["Available", available, "catalog"],
+    ["On loan", loans.length, "circulation"],
+    ["Overdue", overdue.length, "reports"],
+    ["Reservations", waiting.length, "circulation"],
   ] as const;
+  function person(id: string) {
+    return students.find((row) => row.id === id)?.name ?? staff.find((row) => row.id === id)?.name ?? "Member";
+  }
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-[#1f2533]">Librarian dashboard</h1>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-medium text-[#8b93a7]">Library / Dashboard</p>
+          <h1 className="text-xl font-semibold text-[#1f2533]">Good day, {name.split(" ")[0]}</h1>
+          <p className="text-sm text-[#667085]">Issue, return, and follow up from here.</p>
+        </div>
+        <p className="text-sm text-[#667085]">{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-[#e6e9ef] bg-white px-4 py-3">
+        {cards.map(([label, value, view]) => (
+          <button key={label} type="button" onClick={() => onJump(view)} className="rounded-lg border border-[#e6e9ef] bg-white px-4 py-3 text-left hover:border-[#1b6de0]">
             <p className="text-xs font-medium tracking-wide text-[#667085] uppercase">{label}</p>
             <p className="mt-1 text-2xl font-semibold text-[#1f2533]">{value}</p>
-          </div>
+          </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Button onClick={() => onJump("catalog")}>Add book</Button>
         <Button variant="outline" onClick={() => onJump("circulation")}>Issue book</Button>
         <Button variant="outline" onClick={() => onJump("circulation")}>Return book</Button>
         <Button variant="outline" onClick={() => onJump("members")}>Register member</Button>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-[#1f2533]">Overdue</h2>
+            <button type="button" className="text-xs font-semibold text-[#1b6de0]" onClick={() => onJump("reports")}>Reports</button>
+          </div>
+          {overdue.length === 0 ? <p className="mt-3 text-sm text-[#667085]">No overdue copies.</p> : (
+            <ul className="mt-3 space-y-2 text-sm">
+              {overdue.slice(0, 6).map((row) => (
+                <li key={row.id} className="flex justify-between gap-3 border-b border-[#eef1f6] pb-2 last:border-0">
+                  <span>{person(row.studentId || row.staffId || "")} · {books.find((book) => book.id === row.bookId)?.title ?? "Book"}</span>
+                  <span className="shrink-0 text-[#d92d20]">Due {row.dueOn}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-[#1f2533]">Reservations</h2>
+            <button type="button" className="text-xs font-semibold text-[#1b6de0]" onClick={() => onJump("circulation")}>Circulation</button>
+          </div>
+          {waiting.length === 0 ? <p className="mt-3 text-sm text-[#667085]">No one is waiting for a title.</p> : (
+            <ul className="mt-3 space-y-2 text-sm">
+              {waiting.slice(0, 6).map((row) => (
+                <li key={row.id} className="flex justify-between gap-3 border-b border-[#eef1f6] pb-2 last:border-0">
+                  <span>{row.memberName} · {books.find((book) => book.id === row.bookId)?.title ?? "Book"}</span>
+                  <span className="shrink-0 text-[#1b6de0]">{row.status === "ready" ? "Ready" : `Queue ${row.queue ?? ""}`}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

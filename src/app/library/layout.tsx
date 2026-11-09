@@ -98,7 +98,7 @@ export default function LibrarianLayout({ children }: { children: ReactNode }) {
       <div className="min-w-0">
         <header className="sticky top-0 z-30 border-b border-[#e6e9ef] bg-white">
           <div className="flex h-14 items-center justify-between px-4">
-            <p className="text-sm font-semibold text-[#1f2533]">Library</p>
+            <p className="text-sm font-semibold text-[#1f2533]">{shown === "dashboard" ? "Library dashboard" : shown[0].toUpperCase() + shown.slice(1)}</p>
             <Button variant="outline" onClick={signOut}>
               <LogOut className="size-4" />
               Log out
