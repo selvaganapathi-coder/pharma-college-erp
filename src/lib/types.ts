@@ -230,6 +230,8 @@ export type Book = {
   title: string;
   author: string;
   copies: number;
+  /** Pharmacy shelf, such as Pharmacology. */
+  subject?: string;
   photoUrl?: string;
   deletedAt?: string;
 };

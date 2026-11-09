@@ -81,6 +81,13 @@ export function previewBundle(role: Role): { user: User; state: AppState } {
           status: "active",
         },
       ],
+      books: [
+        { id: "preview-book-pharm", isbn: "9780000000011", title: "Dispensing Pharmaceutics", author: "Cooper", copies: 2, subject: "Pharmaceutics" },
+        { id: "preview-book-chem", isbn: "9780000000028", title: "Pharmaceutical Chemistry", author: "Beckett", copies: 2, subject: "Pharmaceutical Chemistry" },
+        { id: "preview-book-cology", isbn: "9780000000035", title: "Essentials of Pharmacology", author: "Tripathi", copies: 2, subject: "Pharmacology" },
+        { id: "preview-book-cognosy", isbn: "9780000000042", title: "Pharmacognosy", author: "Kokate", copies: 2, subject: "Pharmacognosy" },
+        { id: "preview-book-practice", isbn: "9780000000059", title: "Pharmacy Practice", author: "Tipnis", copies: 2, subject: "Pharmacy Practice" },
+      ],
       staff: [
         {
           id: staffRecordId,

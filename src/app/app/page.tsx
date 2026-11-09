@@ -73,6 +73,24 @@ export default function DashboardPage() {
         <ScheduleCard slots={todaySlots} weekday={weekday} />
         <AlertsColumn notices={important} />
       </div>
+      {overdueBooks.length ? (
+        <div className="mt-6">
+          <SectionCard title="Library overdue" action={<Link href="/app/library" className="text-xs font-semibold text-primary">Open library</Link>}>
+            <ul className="space-y-2 text-sm">
+              {overdueBooks.map((row) => {
+                const book = state.books.find((b) => b.id === row.bookId);
+                const student = state.students.find((s) => s.id === row.studentId);
+                const left = (book?.copies ?? 0) - state.checkouts.filter((c) => c.bookId === row.bookId && !c.returnedOn).length;
+                return (
+                  <li key={row.id}>
+                    {student?.name ?? "Student"} still has {book?.title ?? "a book"}, due {row.dueOn}. {left <= 0 ? "No free copy, so do not issue this title again yet." : `${left} free.`}
+                  </li>
+                );
+              })}
+            </ul>
+          </SectionCard>
+        </div>
+      ) : null}
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <SectionCard title="Quick actions">
           <div className="flex flex-wrap gap-2">

@@ -20,37 +20,7 @@ import { uid } from "@/lib/store";
 import { pick } from "@/lib/pick";
 import { toast } from "sonner";
 import type { Book } from "@/lib/types";
-
-const LIBRARY_PLAN = [
-  {
-    title: "Catalogue the pharmacy collection",
-    body: "Add each title with its author, ISBN, number of copies, and a cover photo. Keep pharmaceutics, pharmaceutical chemistry, pharmacology, pharmacognosy, and pharmacy practice as separate shelves in the title name so students can search them.",
-  },
-  {
-    title: "Admit the borrower first",
-    body: "Issue a book only to a student who already exists under Students, with a roll number. The library does not create a student record.",
-  },
-  {
-    title: "Issue the book for 14 days",
-    body: "Choose Issue book, pick the title and the student, and save. The due date is 14 days out. Free copies for that title drop by one while the loan is open.",
-  },
-  {
-    title: "Let the student and parent see the loan",
-    body: "The student portal and the parent portal show only that borrower’s library loans. They do not see the full catalogue editor.",
-  },
-  {
-    title: "Watch the four counters",
-    body: "Total books, Issued, Overdue, and Available copies come from the catalogue and the open loans. Do not issue a title when its free copies are zero.",
-  },
-  {
-    title: "Return the book and record a late fine",
-    body: "On Checkouts, press Return. If the due date has passed, the return stores a ₹20 fine and marks the copy available again.",
-  },
-  {
-    title: "Follow up on overdue loans",
-    body: "The office dashboard lists overdue books. Ask the student to return the copy before another issue of the same title when no free copy remains.",
-  },
-];
+import { LibraryPlan, PHARMACY_SHELVES } from "./library-plan";
 
 export default function LibraryPage() {
   const { state, save, remove, allowed, scopedStudentId, upload } = useApp();
@@ -80,7 +50,7 @@ export default function LibraryPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setForm({ id: uid("b"), isbn: "", title: "", author: "", copies: 1 });
+                  setForm({ id: uid("b"), isbn: "", title: "", author: "", copies: 1, subject: PHARMACY_SHELVES[0] });
                   setBookOpen(true);
                 }}
               >
@@ -97,18 +67,21 @@ export default function LibraryPage() {
         <StatCard title="Overdue" value={`${state.checkouts.filter((c) => !c.returnedOn && c.dueOn < new Date().toISOString().slice(0, 10)).length}`} />
         <StatCard title="Available copies" value={`${Math.max(0, state.books.reduce((s, b) => s + (b.deletedAt ? 0 : b.copies), 0) - state.checkouts.filter((c) => !c.returnedOn).length)}`} />
       </div>
-      <Tabs defaultValue="books">
+      <Tabs defaultValue="plan">
         <TabsList>
+          <TabsTrigger value="plan">Plan</TabsTrigger>
           <TabsTrigger value="books">Books</TabsTrigger>
           <TabsTrigger value="out">Checkouts</TabsTrigger>
-          <TabsTrigger value="plan">Plan</TabsTrigger>
         </TabsList>
+        <TabsContent value="plan">
+          <LibraryPlan state={state} canWrite={canWrite} save={save} />
+        </TabsContent>
         <TabsContent value="books">
           <DataTable
             rows={state.books}
             empty="No books yet. Add the first catalogue title."
             canWrite={canWrite}
-            filter={(row, q) => !q || `${row.title} ${row.author} ${row.isbn}`.toLowerCase().includes(q)}
+            filter={(row, q) => !q || `${row.title} ${row.author} ${row.isbn} ${row.subject ?? ""}`.toLowerCase().includes(q)}
             onEdit={(r) => {
               setForm(r);
               setBookOpen(true);
@@ -127,6 +100,7 @@ export default function LibraryPage() {
                   ),
               },
               { key: "title", header: "Title", cell: (r) => r.title },
+              { key: "subject", header: "Shelf", cell: (r) => r.subject || "—" },
               { key: "author", header: "Author", cell: (r) => r.author },
               { key: "isbn", header: "ISBN", cell: (r) => r.isbn },
               { key: "left", header: "Free copies", cell: (r) => copiesLeft(r.id) },
@@ -181,21 +155,6 @@ export default function LibraryPage() {
             ]}
           />
         </TabsContent>
-        <TabsContent value="plan">
-          <ol className="space-y-3">
-            {LIBRARY_PLAN.map((step, index) => (
-              <li key={step.title} className="erp-card flex gap-4 p-4">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white">
-                  {index + 1}
-                </span>
-                <div>
-                  <p className="font-semibold text-primary">{step.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </TabsContent>
       </Tabs>
       <FormDialog
         open={bookOpen}
@@ -220,6 +179,19 @@ export default function LibraryPage() {
                 onChange={(url) => setForm({ ...form, photoUrl: url })}
                 onFile={(file) => upload("books", form.id, file)}
               />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label>Shelf</Label>
+              <Select value={form.subject ?? ""} onValueChange={pick((subject) => setForm({ ...form, subject }))} items={Object.fromEntries(PHARMACY_SHELVES.map((shelf) => [shelf, shelf]))}>
+                <SelectTrigger>
+                  <SelectValue>{(v: string | null) => v || "Shelf"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {PHARMACY_SHELVES.map((shelf) => (
+                    <SelectItem key={shelf} value={shelf}>{shelf}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Title</Label>
@@ -247,8 +219,13 @@ export default function LibraryPage() {
         description="Issue is recorded against the student name and admission number."
         submitLabel="Issue for 14 days"
         onSubmit={async () => {
-          if (!bookId || !studentId) {
-            toast.error("Select a book and a student.");
+          const borrower = state.students.find((s) => s.id === studentId && !s.deletedAt && s.status === "active" && s.rollNo.trim());
+          if (!bookId || !borrower) {
+            toast.error("Select a book and a student who already has a roll number.");
+            return;
+          }
+          if (copiesLeft(bookId) <= 0) {
+            toast.error("No free copy of this title. Wait for a return before issuing it again.");
             return;
           }
           const due = new Date();
@@ -291,7 +268,7 @@ export default function LibraryPage() {
           </div>
           <div className="sm:col-span-2">
             <StudentSelect
-              students={state.students.filter((s) => !s.deletedAt).map((s) => ({ id: s.id, name: s.name, rollNo: s.rollNo }))}
+              students={state.students.filter((s) => !s.deletedAt && s.status === "active" && s.rollNo.trim()).map((s) => ({ id: s.id, name: s.name, rollNo: s.rollNo }))}
               value={studentId}
               onChange={setStudentId}
             />
