@@ -351,61 +351,73 @@ function Dashboard({
       action: `${row.returnedOn ? "Returned" : "Issued"} ${books.find((book) => book.id === row.bookId)?.title ?? "a book"}`,
     })),
   ].slice(0, 6);
-  const cards: { label: string; value: number; view: View }[] = [
-    { label: "Books available", value: available, view: "catalog" },
-    { label: "Books currently borrowed", value: loans.length, view: "circulation" },
-    { label: "Overdue books", value: overdue.length, view: "reports" },
-    { label: "Reservations to prepare", value: pickups.length, view: "circulation" },
+  const cards: { label: string; value: number; view: View; hint: string; wash: string; ink: string }[] = [
+    { label: "Books available", value: available, view: "catalog", hint: "On the shelf", wash: "bg-[#eefbf3]", ink: "text-[#067647]" },
+    { label: "Books currently borrowed", value: loans.length, view: "circulation", hint: "Out with members", wash: "bg-[#e7f0ff]", ink: "text-[#0f3d68]" },
+    { label: "Overdue books", value: overdue.length, view: "reports", hint: "Needs a return", wash: overdue.length ? "bg-[#fdecec]" : "bg-white", ink: overdue.length ? "text-[#d92d20]" : "text-[#1f2533]" },
+    { label: "Reservations to prepare", value: pickups.length, view: "circulation", hint: "Ready for pickup", wash: pickups.length ? "bg-[#fff6e8]" : "bg-white", ink: "text-[#b54708]" },
   ];
+  const barColors = ["#0f3d68", "#1b6de0", "#0e8a6a", "#b54708", "#7a3e9d"];
   return (
     <div className="space-y-4">
-      <form className="flex flex-col gap-3 rounded-lg border border-[#e6e9ef] bg-white p-3 sm:flex-row sm:items-center" onSubmit={(event) => { event.preventDefault(); onSearch(find.trim()); }}>
-        <div className="min-w-0 sm:w-44">
-          <p className="text-sm font-semibold text-[#0f3d68]">College Library</p>
-          <p className="text-xs text-[#667085]">{name}</p>
+      <form className="flex flex-col gap-3 rounded-2xl border border-[#d9e2ec] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:flex-row sm:items-center" onSubmit={(event) => { event.preventDefault(); onSearch(find.trim()); }}>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b93a7] uppercase">College Library</p>
+          <p className="text-base font-semibold text-[#0f3d68]">{name}</p>
         </div>
-        <Input className="flex-1" value={find} onChange={(event) => setFind(event.target.value)} placeholder="Search books, members, or barcodes" />
-        <p className="text-sm text-[#667085]">{new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} · {overdue.length + pickups.length} to do</p>
+        <Input className="h-12 flex-1 rounded-full border-[#d9e2ec] bg-[#f7f9fc] px-5" value={find} onChange={(event) => setFind(event.target.value)} placeholder="Search books, members, or barcodes" />
+        <div className="text-right text-sm text-[#667085]">
+          <p>{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <p className="font-semibold text-[#d92d20]">{overdue.length + pickups.length} need attention</p>
+        </div>
       </form>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
-          <button key={card.label} type="button" onClick={() => onJump(card.view)} className={`rounded-lg border bg-white px-4 py-4 text-left ${card.label === "Overdue books" && card.value ? "border-[#f3c1bc]" : "border-[#e6e9ef] hover:border-[#0f3d68]"}`}>
+          <button key={card.label} type="button" onClick={() => onJump(card.view)} className={`rounded-2xl border border-[#e6e9ef] px-4 py-4 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${card.wash}`}>
             <p className="text-sm text-[#667085]">{card.label}</p>
-            <p className={`mt-2 text-3xl font-semibold ${card.label === "Overdue books" && card.value ? "text-[#d92d20]" : "text-[#1f2533]"}`}>{card.value}</p>
+            <p className={`mt-2 text-4xl font-semibold tracking-tight ${card.ink}`}>{card.value}</p>
+            <p className="mt-2 text-xs font-medium text-[#8b93a7]">{card.hint} · Open list</p>
           </button>
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <section className="rounded-2xl border border-[#e6e9ef] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
           <h2 className="font-semibold text-[#1f2533]">Quick actions</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Button onClick={() => onJump("circulation")}>Issue a book</Button>
-            <Button variant="outline" onClick={() => onJump("circulation")}>Return a book</Button>
-            <Button variant="outline" onClick={() => onJump("catalog")}>Add a book</Button>
-            <Button variant="outline" onClick={() => onJump("members")}>Register a member</Button>
+          <div className="mt-3 grid gap-2">
+            {[
+              ["Issue a book", "circulation", "bg-[#0f3d68] text-white"],
+              ["Return a book", "circulation", "bg-white text-[#0f3d68]"],
+              ["Add a book", "catalog", "bg-white text-[#0f3d68]"],
+              ["Register a member", "members", "bg-white text-[#0f3d68]"],
+            ].map(([label, view, tone]) => (
+              <button key={label} type="button" onClick={() => onJump(view as View)} className={`h-12 rounded-xl border border-[#d5e0ea] px-4 text-left text-sm font-semibold ${tone}`}>{label}</button>
+            ))}
           </div>
         </section>
-        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
-          <h2 className="font-semibold text-[#1f2533]">Today’s attention</h2>
-          {overdue.length + pickups.length === 0 ? <p className="mt-3 text-sm text-[#667085]">Nothing needs action today.</p> : (
-            <div className="mt-3 overflow-x-auto">
+        <section className="overflow-hidden rounded-2xl border border-[#e6e9ef] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div className="border-b border-[#eef1f6] px-4 py-3">
+            <h2 className="font-semibold text-[#1f2533]">Today’s attention</h2>
+            <p className="text-xs text-[#8b93a7]">Overdue loans and books waiting for pickup</p>
+          </div>
+          {overdue.length + pickups.length === 0 ? <p className="p-4 text-sm text-[#667085]">Nothing needs action today.</p> : (
+            <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase text-[#8b93a7]"><tr><th className="py-2">Item</th><th>Member</th><th>Due / status</th><th></th></tr></thead>
+                <thead className="bg-[#f7f9fc] text-xs uppercase text-[#8b93a7]"><tr><th className="px-4 py-2">Item</th><th>Member</th><th>Due / status</th><th className="px-4"></th></tr></thead>
                 <tbody>
                   {overdue.map((row) => (
                     <tr key={row.id} className="border-t border-[#eef1f6]">
-                      <td className="py-2 pr-2">{books.find((book) => book.id === row.bookId)?.title ?? "Book"}</td>
-                      <td className="pr-2">{person(row.studentId || row.staffId || "")}</td>
-                      <td className="pr-2 text-[#d92d20]">Overdue by {lateDays(row.dueOn)} days</td>
-                      <td><Button size="sm" variant="outline" onClick={() => onJump("circulation")}>View loan</Button></td>
+                      <td className="px-4 py-3 font-medium">{books.find((book) => book.id === row.bookId)?.title ?? "Book"}</td>
+                      <td>{person(row.studentId || row.staffId || "")}</td>
+                      <td><span className="rounded-full bg-[#fdecec] px-2 py-1 text-xs font-semibold text-[#d92d20]">Overdue by {lateDays(row.dueOn)} days</span></td>
+                      <td className="px-4"><Button size="sm" variant="outline" onClick={() => onJump("circulation")}>View loan</Button></td>
                     </tr>
                   ))}
                   {pickups.map((row) => (
                     <tr key={row.id} className="border-t border-[#eef1f6]">
-                      <td className="py-2 pr-2">{books.find((book) => book.id === row.bookId)?.title ?? "Book"}</td>
-                      <td className="pr-2">{row.memberName}</td>
-                      <td className="pr-2 text-[#0f3d68]">Ready for pickup</td>
-                      <td><Button size="sm" onClick={() => onCollect(row)}>Mark collected</Button></td>
+                      <td className="px-4 py-3 font-medium">{books.find((book) => book.id === row.bookId)?.title ?? "Book"}</td>
+                      <td>{row.memberName}</td>
+                      <td><span className="rounded-full bg-[#fff6e8] px-2 py-1 text-xs font-semibold text-[#b54708]">Ready for pickup</span></td>
+                      <td className="px-4"><Button size="sm" onClick={() => onCollect(row)}>Mark collected</Button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -415,25 +427,30 @@ function Dashboard({
         </section>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+        <section className="rounded-2xl border border-[#e6e9ef] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
           <h2 className="font-semibold text-[#1f2533]">Collection overview</h2>
-          <ul className="mt-3 space-y-2">
-            {byType.map((row) => (
+          <p className="text-xs text-[#8b93a7]">Books by resource type</p>
+          <ul className="mt-4 space-y-3">
+            {byType.map((row, index) => (
               <li key={row.kind}>
-                <div className="mb-1 flex justify-between text-sm"><span>{row.kind}s</span><span>{row.count}</span></div>
-                <div className="h-2 rounded-full bg-[#eef1f6]"><div className="h-2 rounded-full bg-[#0f3d68]" style={{ width: `${(row.count / maxType) * 100}%` }} /></div>
+                <div className="mb-1 flex justify-between text-sm"><span>{row.kind === "Reference" ? "Reference books" : `${row.kind}s`}</span><span className="font-semibold">{row.count}</span></div>
+                <div className="h-2.5 rounded-full bg-[#eef1f6]"><div className="h-2.5 rounded-full" style={{ width: `${Math.max(row.count ? 8 : 0, (row.count / maxType) * 100)}%`, background: barColors[index] }} /></div>
               </li>
             ))}
           </ul>
         </section>
-        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+        <section className="rounded-2xl border border-[#e6e9ef] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
           <h2 className="font-semibold text-[#1f2533]">Recent activity</h2>
+          <p className="text-xs text-[#8b93a7]">Latest issues and returns</p>
           {activity.length === 0 ? <p className="mt-3 text-sm text-[#667085]">No issues or returns yet.</p> : (
-            <ul className="mt-3 space-y-2 text-sm">
+            <ul className="mt-3 space-y-3 text-sm">
               {activity.map((row) => (
-                <li key={row.id} className="border-b border-[#eef1f6] pb-2 last:border-0">
-                  <p>{row.action}</p>
-                  <p className="text-xs text-[#8b93a7]">{row.actor} · {row.at.slice(0, 16).replace("T", " ")}</p>
+                <li key={row.id} className="flex gap-3">
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e7f0ff] text-xs font-bold text-[#0f3d68]">{row.actor.slice(0, 1)}</span>
+                  <div>
+                    <p className="font-medium text-[#1f2533]">{row.action}</p>
+                    <p className="text-xs text-[#8b93a7]">{row.actor} · {row.at.slice(0, 16).replace("T", " ")}</p>
+                  </div>
                 </li>
               ))}
             </ul>
