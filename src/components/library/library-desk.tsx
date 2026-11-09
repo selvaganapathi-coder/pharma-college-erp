@@ -15,6 +15,7 @@ import {
   findDuplicate,
   isOverdue,
   loadCopies,
+  loadActivity,
   loadLibraryRules,
   loadReservations,
   memberLoans,
@@ -50,7 +51,23 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
   }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rules, setRules] = useState<LibraryRules>(() => loadLibraryRules());
-  const [reservations, setReservations] = useState<Reservation[]>(() => loadReservations());
+  const [reservations, setReservations] = useState<Reservation[]>(() => {
+    const saved = loadReservations();
+    if (saved.length) return saved;
+    const sample: Reservation = {
+      id: "sample-ready",
+      bookId: "sample-book-01",
+      memberId: "preview-student",
+      memberName: "Aarav Kumar",
+      memberKind: "student",
+      at: new Date().toISOString().slice(0, 10),
+      status: "ready",
+      pickupBy: new Date().toISOString().slice(0, 10),
+      queue: 1,
+    };
+    saveReservations([sample]);
+    return [sample];
+  });
   const [copies, setCopies] = useState<LibraryCopy[]>([]);
   const copyKey = state.books.map((book) => `${book.id}:${book.copies}:${book.resourceType ?? ""}`).join("|");
   useEffect(() => {
@@ -156,6 +173,19 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
     toast.success(`Reservation placed. Queue position ${mine?.queue ?? 1}.`);
   }
 
+  function collect(reservation: Reservation) {
+    remember(reservations.map((row) => (row.id === reservation.id ? { ...row, status: "fulfilled" } : row)));
+    setCopies((current) => {
+      const held = current.find((copy) => copy.bookId === reservation.bookId && copy.status === "reserved");
+      if (!held) return current;
+      const next = current.map((copy) => (copy.id === held.id ? { ...copy, status: "available" as const } : copy));
+      saveCopies(next);
+      return next;
+    });
+    recordActivity(user?.name ?? "Librarian", `Marked ${reservation.memberName}'s pickup collected.`);
+    toast.success("Marked collected.");
+  }
+
   async function restore(payload: { books: Book[]; copies: LibraryCopy[]; checkouts: Checkout[]; rules: LibraryRules; reservations: Reservation[] }) {
     setRules(payload.rules);
     saveLibraryRules(payload.rules);
@@ -218,6 +248,7 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
             setQuery(text);
             openView("catalog");
           }}
+          onCollect={collect}
         />
       ) : null}
       {shown === "catalog" || shown === "book" ? (
@@ -283,6 +314,7 @@ function Dashboard({
   name,
   onJump,
   onSearch,
+  onCollect,
 }: {
   books: Book[];
   checkouts: Checkout[];
@@ -293,80 +325,115 @@ function Dashboard({
   name: string;
   onJump: (view: View) => void;
   onSearch: (text: string) => void;
+  onCollect: (reservation: Reservation) => void;
 }) {
   const loans = openLoans(checkouts);
-  const copies = books.reduce((sum, book) => sum + book.copies, 0);
   const available = books.reduce((sum, book) => sum + availableBarcodes(book, checkouts).length, 0);
   const overdue = loans.filter((row) => isOverdue(row, today));
-  const waiting = reservations.filter((row) => row.status === "waiting" || row.status === "ready");
-  const cards = [
-    ["Titles", books.length, "catalog"],
-    ["Copies", copies, "catalog"],
-    ["Available", available, "catalog"],
-    ["On loan", loans.length, "circulation"],
-    ["Overdue", overdue.length, "reports"],
-    ["Reservations", waiting.length, "circulation"],
-  ] as const;
+  const pickups = reservations.filter((row) => row.status === "ready");
   const [find, setFind] = useState("");
   function person(id: string) {
     return students.find((row) => row.id === id)?.name ?? staff.find((row) => row.id === id)?.name ?? "Member";
   }
+  function lateDays(due: string) {
+    const ms = new Date(`${today}T00:00:00`).getTime() - new Date(`${due}T00:00:00`).getTime();
+    return Math.max(1, Math.round(ms / 86400000));
+  }
+  const kinds = ["Textbook", "Reference", "Journal", "Pharmacopoeia", "E-book"] as const;
+  const byType = kinds.map((kind) => ({ kind, count: books.filter((book) => (book.resourceType ?? "Textbook") === kind).length }));
+  const maxType = Math.max(1, ...byType.map((row) => row.count));
+  const activity = [
+    ...loadActivity(),
+    ...checkouts.slice(0, 8).map((row) => ({
+      id: row.id,
+      at: row.returnedOn ?? row.issuedOn,
+      actor: row.processedBy || name,
+      action: `${row.returnedOn ? "Returned" : "Issued"} ${books.find((book) => book.id === row.bookId)?.title ?? "a book"}`,
+    })),
+  ].slice(0, 6);
+  const cards: { label: string; value: number; view: View }[] = [
+    { label: "Books available", value: available, view: "catalog" },
+    { label: "Books currently borrowed", value: loans.length, view: "circulation" },
+    { label: "Overdue books", value: overdue.length, view: "reports" },
+    { label: "Reservations to prepare", value: pickups.length, view: "circulation" },
+  ];
   return (
     <div className="space-y-4">
-      <form className="flex flex-col gap-2 rounded-lg border border-[#e6e9ef] bg-white p-3 sm:flex-row" onSubmit={(event) => { event.preventDefault(); onSearch(find.trim()); }}>
-        <Input value={find} onChange={(event) => setFind(event.target.value)} placeholder="Find a book by title, author, ISBN, or subject" />
-        <Button type="submit">Search {books.length} books</Button>
-      </form>
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-medium text-[#8b93a7]">Library / Dashboard</p>
-          <h1 className="text-xl font-semibold text-[#1f2533]">Good day, {name.split(" ")[0]}</h1>
-          <p className="text-sm text-[#667085]">Issue, return, and follow up from here.</p>
+      <form className="flex flex-col gap-3 rounded-lg border border-[#e6e9ef] bg-white p-3 sm:flex-row sm:items-center" onSubmit={(event) => { event.preventDefault(); onSearch(find.trim()); }}>
+        <div className="min-w-0 sm:w-44">
+          <p className="text-sm font-semibold text-[#0f3d68]">College Library</p>
+          <p className="text-xs text-[#667085]">{name}</p>
         </div>
-        <p className="text-sm text-[#667085]">{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map(([label, value, view]) => (
-          <button key={label} type="button" onClick={() => onJump(view)} className="rounded-lg border border-[#e6e9ef] bg-white px-4 py-3 text-left hover:border-[#1b6de0]">
-            <p className="text-xs font-medium tracking-wide text-[#667085] uppercase">{label}</p>
-            <p className="mt-1 text-2xl font-semibold text-[#1f2533]">{value}</p>
+        <Input className="flex-1" value={find} onChange={(event) => setFind(event.target.value)} placeholder="Search books, members, or barcodes" />
+        <p className="text-sm text-[#667085]">{new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} · {overdue.length + pickups.length} to do</p>
+      </form>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((card) => (
+          <button key={card.label} type="button" onClick={() => onJump(card.view)} className={`rounded-lg border bg-white px-4 py-4 text-left ${card.label === "Overdue books" && card.value ? "border-[#f3c1bc]" : "border-[#e6e9ef] hover:border-[#0f3d68]"}`}>
+            <p className="text-sm text-[#667085]">{card.label}</p>
+            <p className={`mt-2 text-3xl font-semibold ${card.label === "Overdue books" && card.value ? "text-[#d92d20]" : "text-[#1f2533]"}`}>{card.value}</p>
           </button>
         ))}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Button onClick={() => onJump("catalog")}>Add book</Button>
-        <Button variant="outline" onClick={() => onJump("circulation")}>Issue book</Button>
-        <Button variant="outline" onClick={() => onJump("circulation")}>Return book</Button>
-        <Button variant="outline" onClick={() => onJump("members")}>Register member</Button>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+          <h2 className="font-semibold text-[#1f2533]">Quick actions</h2>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button onClick={() => onJump("circulation")}>Issue a book</Button>
+            <Button variant="outline" onClick={() => onJump("circulation")}>Return a book</Button>
+            <Button variant="outline" onClick={() => onJump("catalog")}>Add a book</Button>
+            <Button variant="outline" onClick={() => onJump("members")}>Register a member</Button>
+          </div>
+        </section>
+        <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+          <h2 className="font-semibold text-[#1f2533]">Today’s attention</h2>
+          {overdue.length + pickups.length === 0 ? <p className="mt-3 text-sm text-[#667085]">Nothing needs action today.</p> : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase text-[#8b93a7]"><tr><th className="py-2">Item</th><th>Member</th><th>Due / status</th><th></th></tr></thead>
+                <tbody>
+                  {overdue.map((row) => (
+                    <tr key={row.id} className="border-t border-[#eef1f6]">
+                      <td className="py-2 pr-2">{books.find((book) => book.id === row.bookId)?.title ?? "Book"}</td>
+                      <td className="pr-2">{person(row.studentId || row.staffId || "")}</td>
+                      <td className="pr-2 text-[#d92d20]">Overdue by {lateDays(row.dueOn)} days</td>
+                      <td><Button size="sm" variant="outline" onClick={() => onJump("circulation")}>View loan</Button></td>
+                    </tr>
+                  ))}
+                  {pickups.map((row) => (
+                    <tr key={row.id} className="border-t border-[#eef1f6]">
+                      <td className="py-2 pr-2">{books.find((book) => book.id === row.bookId)?.title ?? "Book"}</td>
+                      <td className="pr-2">{row.memberName}</td>
+                      <td className="pr-2 text-[#0f3d68]">Ready for pickup</td>
+                      <td><Button size="sm" onClick={() => onCollect(row)}>Mark collected</Button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-[#1f2533]">Overdue</h2>
-            <button type="button" className="text-xs font-semibold text-[#1b6de0]" onClick={() => onJump("reports")}>Reports</button>
-          </div>
-          {overdue.length === 0 ? <p className="mt-3 text-sm text-[#667085]">No overdue copies.</p> : (
-            <ul className="mt-3 space-y-2 text-sm">
-              {overdue.slice(0, 6).map((row) => (
-                <li key={row.id} className="flex justify-between gap-3 border-b border-[#eef1f6] pb-2 last:border-0">
-                  <span>{person(row.studentId || row.staffId || "")} · {books.find((book) => book.id === row.bookId)?.title ?? "Book"}</span>
-                  <span className="shrink-0 text-[#d92d20]">Due {row.dueOn}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <h2 className="font-semibold text-[#1f2533]">Collection overview</h2>
+          <ul className="mt-3 space-y-2">
+            {byType.map((row) => (
+              <li key={row.kind}>
+                <div className="mb-1 flex justify-between text-sm"><span>{row.kind}s</span><span>{row.count}</span></div>
+                <div className="h-2 rounded-full bg-[#eef1f6]"><div className="h-2 rounded-full bg-[#0f3d68]" style={{ width: `${(row.count / maxType) * 100}%` }} /></div>
+              </li>
+            ))}
+          </ul>
         </section>
         <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-[#1f2533]">Reservations</h2>
-            <button type="button" className="text-xs font-semibold text-[#1b6de0]" onClick={() => onJump("circulation")}>Circulation</button>
-          </div>
-          {waiting.length === 0 ? <p className="mt-3 text-sm text-[#667085]">No one is waiting for a title.</p> : (
+          <h2 className="font-semibold text-[#1f2533]">Recent activity</h2>
+          {activity.length === 0 ? <p className="mt-3 text-sm text-[#667085]">No issues or returns yet.</p> : (
             <ul className="mt-3 space-y-2 text-sm">
-              {waiting.slice(0, 6).map((row) => (
-                <li key={row.id} className="flex justify-between gap-3 border-b border-[#eef1f6] pb-2 last:border-0">
-                  <span>{row.memberName} · {books.find((book) => book.id === row.bookId)?.title ?? "Book"}</span>
-                  <span className="shrink-0 text-[#1b6de0]">{row.status === "ready" ? "Ready" : `Queue ${row.queue ?? ""}`}</span>
+              {activity.map((row) => (
+                <li key={row.id} className="border-b border-[#eef1f6] pb-2 last:border-0">
+                  <p>{row.action}</p>
+                  <p className="text-xs text-[#8b93a7]">{row.actor} · {row.at.slice(0, 16).replace("T", " ")}</p>
                 </li>
               ))}
             </ul>
