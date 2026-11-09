@@ -21,6 +21,37 @@ import { pick } from "@/lib/pick";
 import { toast } from "sonner";
 import type { Book } from "@/lib/types";
 
+const LIBRARY_PLAN = [
+  {
+    title: "Catalogue the pharmacy collection",
+    body: "Add each title with its author, ISBN, number of copies, and a cover photo. Keep pharmaceutics, pharmaceutical chemistry, pharmacology, pharmacognosy, and pharmacy practice as separate shelves in the title name so students can search them.",
+  },
+  {
+    title: "Admit the borrower first",
+    body: "Issue a book only to a student who already exists under Students, with a roll number. The library does not create a student record.",
+  },
+  {
+    title: "Issue the book for 14 days",
+    body: "Choose Issue book, pick the title and the student, and save. The due date is 14 days out. Free copies for that title drop by one while the loan is open.",
+  },
+  {
+    title: "Let the student and parent see the loan",
+    body: "The student portal and the parent portal show only that borrower’s library loans. They do not see the full catalogue editor.",
+  },
+  {
+    title: "Watch the four counters",
+    body: "Total books, Issued, Overdue, and Available copies come from the catalogue and the open loans. Do not issue a title when its free copies are zero.",
+  },
+  {
+    title: "Return the book and record a late fine",
+    body: "On Checkouts, press Return. If the due date has passed, the return stores a ₹20 fine and marks the copy available again.",
+  },
+  {
+    title: "Follow up on overdue loans",
+    body: "The office dashboard lists overdue books. Ask the student to return the copy before another issue of the same title when no free copy remains.",
+  },
+];
+
 export default function LibraryPage() {
   const { state, save, remove, allowed, scopedStudentId, upload } = useApp();
   const sid = scopedStudentId();
@@ -70,6 +101,7 @@ export default function LibraryPage() {
         <TabsList>
           <TabsTrigger value="books">Books</TabsTrigger>
           <TabsTrigger value="out">Checkouts</TabsTrigger>
+          <TabsTrigger value="plan">Plan</TabsTrigger>
         </TabsList>
         <TabsContent value="books">
           <DataTable
@@ -148,6 +180,21 @@ export default function LibraryPage() {
               },
             ]}
           />
+        </TabsContent>
+        <TabsContent value="plan">
+          <ol className="space-y-3">
+            {LIBRARY_PLAN.map((step, index) => (
+              <li key={step.title} className="erp-card flex gap-4 p-4">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white">
+                  {index + 1}
+                </span>
+                <div>
+                  <p className="font-semibold text-primary">{step.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
         </TabsContent>
       </Tabs>
       <FormDialog
