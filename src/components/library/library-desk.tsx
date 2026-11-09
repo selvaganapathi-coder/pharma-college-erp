@@ -85,6 +85,10 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
   const [letter, setLetter] = useState("All");
   const [sort, setSort] = useState<"az" | "za" | "author">("az");
   const [showAdd, setShowAdd] = useState(false);
+  const [deskFocus, setDeskFocus] = useState<"issue" | "return" | "loan" | null>(null);
+  const [focusLoanId, setFocusLoanId] = useState<string | null>(null);
+  const [memberQuery, setMemberQuery] = useState("");
+  const [receipt, setReceipt] = useState<string | null>(null);
   const canWrite = mode === "desk" && allowed("library", "write");
   const today = new Date().toISOString().slice(0, 10);
   const books = state.books.filter((book) => !book.deletedAt);
@@ -191,8 +195,34 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
       saveCopies(next);
       return next;
     });
-    recordActivity(user?.name ?? "Librarian", `Marked ${reservation.memberName}'s pickup collected.`);
+    const title = state.books.find((book) => book.id === reservation.bookId)?.title ?? "the book";
+    const when = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    const note = `${reservation.memberName} collected ${title} at ${when}. Librarian: ${user?.name ?? "Librarian"}.`;
+    setReceipt(note);
+    recordActivity(user?.name ?? "Librarian", note);
     toast.success("Marked collected.");
+  }
+
+  function findFromDesk(text: string) {
+    const q = text.trim().toLowerCase();
+    if (!q) return;
+    const copy = copies.find((item) => item.barcode.toLowerCase() === q);
+    if (copy) {
+      setSelectedId(copy.bookId);
+      setQuery(copy.barcode);
+      openView("catalog");
+      return;
+    }
+    const student = state.students.find((row) => row.name.toLowerCase().includes(q) || row.rollNo.toLowerCase() === q);
+    const staffMember = state.staff.find((row) => row.name.toLowerCase().includes(q) || row.staffCode.toLowerCase() === q);
+    const bookHit = books.some((book) => `${book.title} ${book.author} ${book.isbn}`.toLowerCase().includes(q));
+    if ((student || staffMember) && !bookHit) {
+      setMemberQuery((student ?? staffMember)!.name);
+      openView("members");
+      return;
+    }
+    setQuery(text.trim());
+    openView("catalog");
   }
 
   async function restore(payload: { books: Book[]; copies: LibraryCopy[]; checkouts: Checkout[]; rules: LibraryRules; reservations: Reservation[] }) {
@@ -253,11 +283,23 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
           today={today}
           name={user?.name ?? "Librarian"}
           onJump={openView}
-          onSearch={(text) => {
-            setQuery(text);
-            openView("catalog");
-          }}
+          rules={rules}
+          receipt={receipt}
+          onSearch={findFromDesk}
           onCollect={collect}
+          onViewLoan={(id) => {
+            setFocusLoanId(id);
+            setDeskFocus("loan");
+            openView("circulation");
+          }}
+          onIssue={() => {
+            setDeskFocus("issue");
+            openView("circulation");
+          }}
+          onReturn={() => {
+            setDeskFocus("return");
+            openView("circulation");
+          }}
         />
       ) : null}
       {shown === "catalog" || shown === "book" ? (
@@ -280,7 +322,10 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
             canWrite={canWrite}
             showAdd={showAdd}
             setShowAdd={setShowAdd}
-            onRemove={(book) => void save("books", { ...book, deletedAt: new Date().toISOString() }, `Removed ${book.title}.`)}
+            onRemove={(book) => {
+              void save("books", { ...book, deletedAt: new Date().toISOString() }, `Removed ${book.title}.`);
+              recordActivity(user?.name ?? "Librarian", `Removed ${book.title}.`);
+            }}
             rows={results}
             onOpen={setSelectedId}
           />
@@ -310,7 +355,7 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
           ) : null}
         </div>
       ) : null}
-      {shown === "members" ? <Members stateStudents={state.students} stateStaff={state.staff} checkouts={state.checkouts} reservations={reservations} today={today} canWrite={canWrite} onSaveStudent={(row) => void save("students", row, `Registered ${row.name}.`)} onSaveStaff={(row) => void save("staff", row, `Registered ${row.name}.`)} /> : null}
+      {shown === "members" ? <Members stateStudents={state.students} stateStaff={state.staff} checkouts={state.checkouts} reservations={reservations} today={today} canWrite={canWrite} memberQuery={memberQuery} onSaveStudent={(row) => void save("students", row, `Registered ${row.name}.`)} onSaveStaff={(row) => void save("staff", row, `Registered ${row.name}.`)} /> : null}
       {shown === "circulation" ? (
         <Circulation
           books={books}
@@ -320,6 +365,8 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
           reservations={reservations}
           rules={rules}
           today={today}
+          focus={deskFocus}
+          focusLoanId={focusLoanId}
           onIssue={(book, member, override, barcode) => void issue(book, member, override, barcode)}
           onReturn={(row) => void giveBack(row)}
           onRenew={(row, kind) => void renew(row, kind)}
@@ -344,6 +391,11 @@ function Dashboard({
   onJump,
   onSearch,
   onCollect,
+  onViewLoan,
+  onIssue,
+  onReturn,
+  rules,
+  receipt,
 }: {
   books: Book[];
   checkouts: Checkout[];
@@ -355,6 +407,11 @@ function Dashboard({
   onJump: (view: View) => void;
   onSearch: (text: string) => void;
   onCollect: (reservation: Reservation) => void;
+  onViewLoan: (id: string) => void;
+  onIssue: () => void;
+  onReturn: () => void;
+  rules: LibraryRules;
+  receipt: string | null;
 }) {
   const loans = openLoans(checkouts);
   const available = books.reduce((sum, book) => sum + availableBarcodes(book, checkouts).length, 0);
@@ -369,7 +426,12 @@ function Dashboard({
     return Math.max(1, Math.round(ms / 86400000));
   }
   const kinds = ["Textbook", "Reference", "Journal", "Pharmacopoeia", "E-book"] as const;
-  const byType = kinds.map((kind) => ({ kind, count: books.filter((book) => (book.resourceType ?? "Textbook") === kind).length }));
+  const byType = kinds.map((kind) => {
+    const titles = books.filter((book) => (book.resourceType ?? "Textbook") === kind);
+    const copyCount = titles.reduce((sum, book) => sum + book.copies, 0);
+    const out = loans.filter((row) => titles.some((book) => book.id === row.bookId)).length;
+    return { kind, count: titles.length, in: Math.max(0, copyCount - out), out };
+  });
   const barColors = ["#0f3d68", "#1b6de0", "#0e8a6a", "#b54708", "#7a3e9d"];
   const activity = [
     ...loadActivity(),
@@ -386,9 +448,9 @@ function Dashboard({
     { label: "Overdue", value: overdue.length, view: "reports", hint: "Ask for these back", icon: AlertCircle, wash: "bg-[#fdecec]", ink: "text-[#d92d20]" },
     { label: "Pickup needed", value: pickups.length, view: "circulation", hint: "Ready for a member", icon: BookPlus, wash: "bg-[#fff6e8]", ink: "text-[#b54708]" },
   ];
-  const actions: { label: string; note: string; view: View; icon: typeof Package; primary?: boolean }[] = [
-    { label: "Issue a book", note: "Scan a barcode", view: "circulation", icon: BookMarked, primary: true },
-    { label: "Return a book", note: "Close a loan", view: "circulation", icon: RotateCcw },
+  const actions: { label: string; note: string; view: View | "issue" | "return"; icon: typeof Package; primary?: boolean }[] = [
+    { label: "Issue a book", note: "Scan a barcode", view: "issue", icon: BookMarked, primary: true },
+    { label: "Return a book", note: "Close a loan", view: "return", icon: RotateCcw },
     { label: "Add a book", note: "New title", view: "catalog", icon: BookPlus },
     { label: "Register a member", note: "Student or faculty", view: "members", icon: UserPlus },
   ];
@@ -429,7 +491,7 @@ function Dashboard({
             {actions.map((action) => {
               const Icon = action.icon;
               return (
-                <button key={action.label} type="button" onClick={() => onJump(action.view)} className={`flex min-h-24 flex-col justify-between rounded-2xl p-3 text-left ${action.primary ? "bg-[#0f3d68] text-white" : "bg-[#f4f7fb] text-[#0f3d68]"}`}>
+                <button key={action.label} type="button" onClick={() => action.view === "issue" ? onIssue() : action.view === "return" ? onReturn() : onJump(action.view)} className={`flex min-h-24 flex-col justify-between rounded-2xl p-3 text-left ${action.primary ? "bg-[#0f3d68] text-white" : "bg-[#f4f7fb] text-[#0f3d68]"}`}>
                   <Icon className="size-5" />
                   <span>
                     <span className="block text-sm font-semibold">{action.label}</span>
@@ -448,18 +510,25 @@ function Dashboard({
             </div>
             <span className="rounded-full bg-[#fdecec] px-2.5 py-1 text-xs font-semibold text-[#d92d20]">{overdue.length + pickups.length}</span>
           </div>
+          {receipt ? <p className="mx-4 mb-3 rounded-xl bg-[#e8f7ee] px-3 py-2 text-sm text-[#067647]">{receipt}</p> : null}
           {overdue.length + pickups.length === 0 ? <p className="px-4 pb-4 text-sm text-[#667085]">Nothing needs action today.</p> : (
             <ul>
-              {overdue.map((row) => (
+              {overdue.map((row) => {
+                const book = books.find((item) => item.id === row.bookId);
+                const memberId = row.studentId || row.staffId || "";
+                const held = memberLoans(checkouts, memberId).length;
+                return (
                 <li key={row.id} className="flex flex-wrap items-center gap-3 border-t border-[#f0f3f8] px-4 py-3">
                   <span className="h-10 w-1 rounded-full bg-[#d92d20]" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-[#1f2533]">{books.find((book) => book.id === row.bookId)?.title ?? "Book"}</span>
-                    <span className="text-xs text-[#667085]">{person(row.studentId || row.staffId || "")} · Overdue by {lateDays(row.dueOn)} days</span>
+                    <span className="block truncate font-medium text-[#1f2533]">{book?.title ?? "Book"}</span>
+                    <span className="text-xs text-[#667085]">{row.staffId ? "Staff" : "Student"} · {person(memberId)} · {held} of 3 out · Row {book?.row || "—"} · Rack {book?.rack || book?.shelf || "—"} · {row.barcode || "no barcode"} · ₹{rules.fineAmount}</span>
+                    <span className="text-xs text-[#d92d20]">Overdue by {lateDays(row.dueOn)} days</span>
                   </span>
-                  <Button size="sm" variant="outline" onClick={() => onJump("circulation")}>View loan</Button>
+                  <Button size="sm" variant="outline" onClick={() => onViewLoan(row.id)}>View loan</Button>
                 </li>
-              ))}
+                );
+              })}
               {pickups.map((row) => (
                 <li key={row.id} className="flex flex-wrap items-center gap-3 border-t border-[#f0f3f8] px-4 py-3">
                   <span className="h-10 w-1 rounded-full bg-[#b54708]" />
@@ -486,7 +555,7 @@ function Dashboard({
             {byType.map((row, index) => (
               <li key={row.kind} className="flex items-center justify-between rounded-xl bg-[#f7f9fc] px-3 py-2">
                 <span className="flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ background: barColors[index] }} />{row.kind === "Reference" ? "Reference" : row.kind}</span>
-                <span className="font-semibold">{row.count}</span>
+                <span className="font-semibold">{row.in} in · {row.out} out</span>
               </li>
             ))}
           </ul>
@@ -830,13 +899,17 @@ function Members(props: {
   reservations: Reservation[];
   today: string;
   canWrite: boolean;
+  memberQuery?: string;
   onSaveStudent: (row: import("@/lib/types").Student) => void;
   onSaveStaff: (row: import("@/lib/types").Staff) => void;
 }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [kind, setKind] = useState<MemberKind>("student");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(props.memberQuery ?? "");
+  useEffect(() => {
+    if (props.memberQuery) setSearch(props.memberQuery);
+  }, [props.memberQuery]);
   const students = props.stateStudents.filter((row) => !row.deletedAt);
   const faculty = props.stateStaff.filter((row) => !row.deletedAt);
   return (
@@ -922,12 +995,18 @@ function Circulation(props: {
   reservations: Reservation[];
   rules: LibraryRules;
   today: string;
+  focus?: "issue" | "return" | "loan" | null;
+  focusLoanId?: string | null;
   onIssue: (book: Book, member: { id: string; name: string; kind: MemberKind }, override?: boolean, barcode?: string) => void;
   onReturn: (row: Checkout) => void;
   onRenew: (row: Checkout, kind: MemberKind) => void;
   onReserve: (book: Book, member: { id: string; name: string; kind: MemberKind }) => void;
 }) {
   const [barcode, setBarcode] = useState("");
+  useEffect(() => {
+    const id = props.focus === "issue" ? "issue-panel" : props.focus ? "return-panel" : "";
+    if (id) document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [props.focus, props.focusLoanId]);
   const [memberId, setMemberId] = useState("");
   const members = [
     ...props.students.filter((row) => !row.deletedAt && row.status === "active" && row.rollNo.trim()).map((row) => ({ id: row.id, name: row.name, kind: "student" as const })),
@@ -953,7 +1032,7 @@ function Circulation(props: {
   }
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      <Panel title="Issue">
+      <Panel title="Issue" id="issue-panel" highlight={props.focus === "issue"}>
         <Label>Member</Label>
         <select className="mt-1 h-11 w-full rounded-lg border border-[#e6e9ef] px-2 text-sm" value={memberId} onChange={(event) => setMemberId(event.target.value)}>
           <option value="">Choose a member</option>
@@ -963,12 +1042,12 @@ function Circulation(props: {
         <Input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Scan or type the copy barcode" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); confirmIssue(); } }} />
         <Button className="mt-2" onClick={confirmIssue}>Confirm issue</Button>
       </Panel>
-      <Panel title="Return">
+      <Panel title="Return" id="return-panel" highlight={props.focus === "return" || props.focus === "loan"}>
         {openLoans(props.checkouts).map((row) => {
           const book = props.books.find((item) => item.id === row.bookId);
           const next = props.reservations.find((item) => item.bookId === row.bookId && item.status === "waiting");
           return (
-            <div key={row.id} className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <div key={row.id} className={`mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg p-2 text-sm ${props.focusLoanId === row.id ? "bg-[#e7f0ff]" : ""}`}>
               <span>{row.barcode || book?.title} · due {row.dueOn}{isOverdue(row, props.today) ? ` · fine ₹${props.rules.fineAmount}` : ""}{next ? ` · reserved for ${next.memberName}` : ""}</span>
               <Button size="sm" variant="outline" onClick={() => props.onReturn(row)}>Return</Button>
             </div>
@@ -1138,6 +1217,6 @@ function LaunchGuide() {
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border border-[#e6e9ef] bg-white p-4"><h2 className="font-semibold text-[#1f2533]">{title}</h2>{children}</section>;
+function Panel({ title, children, id, highlight }: { title: string; children: React.ReactNode; id?: string; highlight?: boolean }) {
+  return <section id={id} className={`rounded-lg border bg-white p-4 ${highlight ? "border-[#0f3d68] ring-2 ring-[#0f3d68]" : "border-[#e6e9ef]"}`}><h2 className="font-semibold text-[#1f2533]">{title}</h2>{children}</section>;
 }
