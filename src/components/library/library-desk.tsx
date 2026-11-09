@@ -21,6 +21,7 @@ import {
   openLoans,
   previewRows,
   queueReservations,
+  readBackup,
   recordActivity,
   returnCopy,
   saveCopies,
@@ -34,7 +35,7 @@ import {
 import type { Book, Checkout } from "@/lib/types";
 import { toast } from "sonner";
 
-type View = "dashboard" | "catalog" | "book" | "members" | "circulation" | "rules" | "reports";
+type View = "dashboard" | "catalog" | "book" | "members" | "circulation" | "rules" | "reports" | "guide";
 
 export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mode?: "desk" | "student" | "faculty"; view?: View; onNavigate?: (view: View) => void }) {
   const { state, save, allowed, user } = useApp();
@@ -88,8 +89,9 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
 
   const selected = books.find((book) => book.id === selectedId) ?? null;
 
-  async function issue(book: Book, member: { id: string; name: string; kind: MemberKind }, override = false) {
-    const decision = canIssue({ rules, book, checkouts: state.checkouts, memberId: member.id, today, kind: member.kind, override, copies });
+  async function issue(book: Book, member: { id: string; name: string; kind: MemberKind }, override = false, barcode?: string) {
+    const scanned = barcode && copies.some((copy) => copy.barcode === barcode) ? barcode : undefined;
+    const decision = canIssue({ rules, book, checkouts: state.checkouts, memberId: member.id, today, kind: member.kind, override, copies, barcode: scanned });
     if (!decision.ok) {
       toast.error(decision.error);
       return;
@@ -154,6 +156,18 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
     toast.success(`Reservation placed. Queue position ${mine?.queue ?? 1}.`);
   }
 
+  async function restore(payload: { books: Book[]; copies: LibraryCopy[]; checkouts: Checkout[]; rules: LibraryRules; reservations: Reservation[] }) {
+    setRules(payload.rules);
+    saveLibraryRules(payload.rules);
+    setCopies(payload.copies);
+    saveCopies(payload.copies);
+    remember(payload.reservations);
+    for (const book of payload.books) await save("books", book, `Restored ${book.title}.`);
+    for (const loan of payload.checkouts) await save("checkouts", loan, "Restored a loan.");
+    recordActivity(user?.name ?? "Librarian", "Restored a library backup.");
+    toast.success("Backup restored.");
+  }
+
   if (mode !== "desk") {
     const mine = memberId ? memberLoans(state.checkouts, memberId) : [];
     const kind: MemberKind = mode === "faculty" ? "faculty" : "student";
@@ -199,14 +213,15 @@ export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mo
           reservations={reservations}
           rules={rules}
           today={today}
-          onIssue={(book, member, override) => void issue(book, member, override)}
+          onIssue={(book, member, override, barcode) => void issue(book, member, override, barcode)}
           onReturn={(row) => void giveBack(row)}
           onRenew={(row, kind) => void renew(row, kind)}
           onReserve={(book, member) => reserve(book, member)}
         />
       ) : null}
       {shown === "rules" ? <RulesEditor rules={rules} canWrite={canWrite} onSave={(next) => { setRules(next); saveLibraryRules(next); toast.success("Library rules saved."); }} /> : null}
-      {shown === "reports" ? <Reports books={books} checkouts={state.checkouts} today={today} rules={rules} reservations={reservations} /> : null}
+      {shown === "reports" ? <Reports books={books} checkouts={state.checkouts} today={today} rules={rules} reservations={reservations} onRestore={(payload) => void restore(payload)} /> : null}
+      {shown === "guide" ? <LaunchGuide /> : null}
     </div>
   );
 }
@@ -505,7 +520,7 @@ function Circulation(props: {
   reservations: Reservation[];
   rules: LibraryRules;
   today: string;
-  onIssue: (book: Book, member: { id: string; name: string; kind: MemberKind }, override?: boolean) => void;
+  onIssue: (book: Book, member: { id: string; name: string; kind: MemberKind }, override?: boolean, barcode?: string) => void;
   onReturn: (row: Checkout) => void;
   onRenew: (row: Checkout, kind: MemberKind) => void;
   onReserve: (book: Book, member: { id: string; name: string; kind: MemberKind }) => void;
@@ -517,6 +532,17 @@ function Circulation(props: {
     ...props.staff.filter((row) => !row.deletedAt).map((row) => ({ id: row.id, name: row.name, kind: "faculty" as const })),
   ];
   const member = members.find((row) => row.id === memberId);
+  function confirmIssue() {
+    const book = findCopy(barcode.trim());
+    if (!book || !member) return toast.error("Choose a member and a copy.");
+    const decision = canIssue({ rules: props.rules, book, checkouts: props.checkouts, memberId: member.id, today: props.today, kind: member.kind, barcode: barcode.trim() });
+    if (!decision.ok) {
+      if ("canOverride" in decision && decision.canOverride) props.onIssue(book, member, true, barcode.trim());
+      else toast.error(decision.error);
+      return;
+    }
+    props.onIssue(book, member, false, barcode.trim());
+  }
   function findCopy(code: string) {
     for (const book of props.books) {
       if (availableBarcodes(book, props.checkouts).includes(code) || openLoans(props.checkouts).some((row) => row.barcode === code)) return book;
@@ -532,18 +558,8 @@ function Circulation(props: {
           {members.map((row) => <option key={row.id} value={row.id}>{row.name} · {row.kind}</option>)}
         </select>
         <Label className="mt-2">Copy barcode</Label>
-        <Input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Book id-copy, ISBN, or book id" />
-        <Button className="mt-2" onClick={() => {
-          const book = findCopy(barcode.trim());
-          if (!book || !member) return toast.error("Choose a member and a copy.");
-          const decision = canIssue({ rules: props.rules, book, checkouts: props.checkouts, memberId: member.id, today: props.today, kind: member.kind });
-          if (!decision.ok) {
-            if ("canOverride" in decision && decision.canOverride) props.onIssue(book, member, true);
-            else toast.error(decision.error);
-            return;
-          }
-          props.onIssue(book, member, false);
-        }}>Confirm issue</Button>
+        <Input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Scan or type the copy barcode" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); confirmIssue(); } }} />
+        <Button className="mt-2" onClick={confirmIssue}>Confirm issue</Button>
       </Panel>
       <Panel title="Return">
         {openLoans(props.checkouts).map((row) => {
@@ -607,7 +623,7 @@ function RulesEditor({ rules, canWrite, onSave }: { rules: LibraryRules; canWrit
   );
 }
 
-function Reports({ books, checkouts, today, rules, reservations }: { books: Book[]; checkouts: Checkout[]; today: string; rules: LibraryRules; reservations: Reservation[] }) {
+function Reports({ books, checkouts, today, rules, reservations, onRestore }: { books: Book[]; checkouts: Checkout[]; today: string; rules: LibraryRules; reservations: Reservation[]; onRestore: (payload: { books: Book[]; copies: LibraryCopy[]; checkouts: Checkout[]; rules: LibraryRules; reservations: Reservation[] }) => void }) {
   const overdue = openLoans(checkouts).filter((row) => isOverdue(row, today));
   function backup() {
     const blob = new Blob([JSON.stringify({ books, copies: loadCopies(), checkouts, rules, reservations }, null, 2)], { type: "application/json" });
@@ -622,7 +638,21 @@ function Reports({ books, checkouts, today, rules, reservations }: { books: Book
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-[#1f2533]">Reports</h1>
-        <Button variant="outline" onClick={backup}>Export spreadsheet</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={backup}>Export spreadsheet</Button>
+          <label className="inline-flex cursor-pointer items-center rounded-md border border-[#e6e9ef] bg-white px-3 py-2 text-sm font-medium">
+            Restore backup
+            <input className="sr-only" type="file" accept="application/json" onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              void file.text().then((text) => {
+                const parsed = readBackup(text);
+                if (!parsed.ok) toast.error(parsed.error);
+                else onRestore(parsed);
+              });
+            }} />
+          </label>
+        </div>
       </div>
       <div className="rounded-lg border border-[#e6e9ef] bg-white p-3 text-sm">
         {books.map((book) => <p key={book.id}>{book.title}: {book.copies} copies, {availableBarcodes(book, checkouts).length} free, {openLoans(checkouts).filter((row) => row.bookId === book.id).length} on loan</p>)}
@@ -659,6 +689,49 @@ function MemberImport({ existing }: { existing: string[] }) {
         setPreview(previewRows(existing, rows));
       }}>Preview import</Button>
       {preview.map((row) => <p key={row.collegeId}>{row.action}: {row.collegeId} · {row.name}</p>)}
+    </div>
+  );
+}
+
+function LaunchGuide() {
+  return (
+    <div className="space-y-4 text-sm text-[#3e4657]">
+      <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+        <h1 className="text-xl font-semibold text-[#1f2533]">Technical setup</h1>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>Front end: these Next.js pages for librarians, students, and faculty.</li>
+          <li>Back end: sign-in, loan limits, due dates, and the reservation queue in this app.</li>
+          <li>Database: titles and loans in the college cloud; copies, reservations, and the backup file for the desk.</li>
+          <li>Hosting: the approved Vercel address. Confirm backups and access with college IT before launch.</li>
+          <li>Barcode scanner: optional. It types into the copy field like a keyboard and presses Enter.</li>
+        </ul>
+      </section>
+      <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+        <h2 className="text-lg font-semibold text-[#1f2533]">Build order</h2>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li>Policies and roles are set under Rules.</li>
+          <li>Screens are Dashboard, Catalog, Members, Circulation, Rules, and Reports.</li>
+          <li>Records are titles, copies, members, loans, and reservations.</li>
+          <li>Sign-in sends each role to its own pages.</li>
+          <li>Catalog and copies, then members, then issue, return, and renewal.</li>
+          <li>Search and the student view, then reservations and reports.</li>
+          <li>Load a small sample, review it here, then import the full lists.</li>
+          <li>Train with this page, launch, and note what the next update should change.</li>
+        </ol>
+      </section>
+      <section className="rounded-lg border border-[#e6e9ef] bg-white p-4">
+        <h2 className="text-lg font-semibold text-[#1f2533]">Ready when</h2>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>Catalog shows whether a copy is available.</li>
+          <li>Issuing the same barcode twice is refused.</li>
+          <li>Students get 14 days and faculty get 30, unless Rules says otherwise.</li>
+          <li>A student sees only their own loans and due dates.</li>
+          <li>A return offers the copy to the next reservation.</li>
+          <li>Reports list inventory and overdue loans.</li>
+          <li>Export spreadsheet can be loaded again with Restore backup.</li>
+          <li>Students and faculty cannot change the catalogue. Librarians can.</li>
+        </ul>
+      </section>
     </div>
   );
 }

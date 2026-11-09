@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { BookOpen, Library, LogOut, Users, Undo2, Settings, FileBarChart } from "lucide-react";
+import { BookOpen, ClipboardList, Library, LogOut, Users, Undo2, Settings, FileBarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/brand-mark";
 import { LoadingState } from "@/components/empty-state";
@@ -16,6 +16,7 @@ function libraryView(pathname: string) {
   if (pathname.startsWith("/library/circulation")) return "circulation" as const;
   if (pathname.startsWith("/library/rules")) return "rules" as const;
   if (pathname.startsWith("/library/reports")) return "reports" as const;
+  if (pathname.startsWith("/library/guide")) return "guide" as const;
   return "dashboard" as const;
 }
 
@@ -26,6 +27,7 @@ const ITEMS = [
   { href: "/library/circulation", label: "Circulation", icon: Undo2 },
   { href: "/library/rules", label: "Rules", icon: Settings },
   { href: "/library/reports", label: "Reports", icon: FileBarChart },
+  { href: "/library/guide", label: "Guide", icon: ClipboardList },
 ];
 
 export default function LibrarianLayout({ children }: { children: ReactNode }) {

@@ -215,16 +215,25 @@ export function canIssue(input: {
   kind: MemberKind;
   override?: boolean;
   copies?: LibraryCopy[];
+  barcode?: string;
 }) {
   const { rules, book, checkouts, memberId, today, kind, override } = input;
   const restricted = restrictedTitle(book);
   if (restricted && !rules.referenceLeaves) {
     return { ok: false as const, error: "Reference and rare items stay in the library." };
   }
-  const free = input.copies?.filter((copy) => copy.bookId === book.id && copy.status === "available") ?? [];
-  const barcode = free[0]?.barcode ?? availableBarcodes(book, checkouts)[0];
-  if (!barcode) {
-    return { ok: false as const, error: "No copy is free. Reserve it instead." };
+  let barcode = input.barcode;
+  if (barcode) {
+    if (openLoans(checkouts).some((row) => row.barcode === barcode)) {
+      return { ok: false as const, error: "That copy already has an open loan." };
+    }
+    const copy = input.copies?.find((item) => item.barcode === barcode);
+    if (input.copies && (!copy || copy.bookId !== book.id || copy.status !== "available")) {
+      return { ok: false as const, error: "That copy is not available to lend." };
+    }
+  } else {
+    barcode = input.copies?.find((copy) => copy.bookId === book.id && copy.status === "available")?.barcode ?? availableBarcodes(book, checkouts)[0];
+    if (!barcode) return { ok: false as const, error: "No copy is free. Reserve it instead." };
   }
   const mine = memberLoans(checkouts, memberId);
   if (rules.blockIfOverdue && mine.some((row) => isOverdue(row, today))) {
@@ -248,4 +257,21 @@ export function canRenew(rules: LibraryRules, loan: Checkout, today: string, kin
 
 export function previewRows(existingIds: string[], rows: { collegeId: string; name: string }[]) {
   return rows.map((row) => ({ ...row, action: existingIds.includes(row.collegeId) ? "update" as const : "add" as const }));
+}
+
+export function readBackup(text: string) {
+  try {
+    const data = JSON.parse(text) as { books?: Book[]; copies?: LibraryCopy[]; checkouts?: Checkout[]; rules?: Partial<LibraryRules>; reservations?: Reservation[] };
+    if (!Array.isArray(data.books)) return { ok: false as const, error: "The backup has no book list." };
+    return {
+      ok: true as const,
+      books: data.books,
+      copies: data.copies ?? [],
+      checkouts: data.checkouts ?? [],
+      rules: { ...DEFAULT_LIBRARY_RULES, ...data.rules },
+      reservations: data.reservations ?? [],
+    };
+  } catch {
+    return { ok: false as const, error: "That file is not a library backup." };
+  }
 }

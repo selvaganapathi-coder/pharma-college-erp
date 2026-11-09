@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableBarcodes, canIssue, canRenew, DEFAULT_LIBRARY_RULES, findDuplicate, previewRows, returnCopy, type LibraryCopy, type LibraryRules, type Reservation } from "@/lib/library-rules";
+import { availableBarcodes, canIssue, canRenew, DEFAULT_LIBRARY_RULES, findDuplicate, previewRows, readBackup, returnCopy, type LibraryCopy, type LibraryRules, type Reservation } from "@/lib/library-rules";
 import type { Book, Checkout } from "@/lib/types";
 
 const book = (over: Partial<Book> = {}): Book => ({
@@ -54,6 +54,20 @@ describe("library rules", () => {
     expect(result.copies[0]?.status).toBe("reserved");
     expect(result.reservations[0]?.status).toBe("ready");
     expect(result.heldFor).toBe("Meera");
+    const again = canIssue({
+      rules,
+      book: book(),
+      checkouts: [loan({ barcode: "b1-1" })],
+      memberId: "s2",
+      today: "2026-11-09",
+      kind: "student",
+      barcode: "b1-1",
+    });
+    expect(again.ok).toBe(false);
+    const facultyDue = canIssue({ rules, book: book({ id: "b9", copies: 1 }), checkouts: [], memberId: "f1", today: "2026-11-09", kind: "faculty" });
+    expect(facultyDue.ok && facultyDue.dueOn).toBe("2026-12-09");
+    expect(readBackup("{\"books\":[]}").ok).toBe(true);
+    expect(readBackup("not json").ok).toBe(false);
     expect(previewRows(["2026-001"], [{ collegeId: "2026-001", name: "Aarav" }, { collegeId: "2026-002", name: "New" }])).toEqual([
       { collegeId: "2026-001", name: "Aarav", action: "update" },
       { collegeId: "2026-002", name: "New", action: "add" },
