@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,14 +27,13 @@ import { toast } from "sonner";
 
 type View = "dashboard" | "catalog" | "book" | "members" | "circulation" | "rules" | "reports";
 
-export function LibraryDesk({ mode = "desk", view: fixedView }: { mode?: "desk" | "student" | "faculty"; view?: View }) {
+export function LibraryDesk({ mode = "desk", view: fixedView, onNavigate }: { mode?: "desk" | "student" | "faculty"; view?: View; onNavigate?: (view: View) => void }) {
   const { state, save, allowed, user } = useApp();
-  const router = useRouter();
   const [view, setView] = useState<View>(fixedView ?? (mode === "desk" ? "dashboard" : "catalog"));
   const shown = fixedView ?? view;
   function openView(next: View) {
-    if (fixedView) {
-      router.push(next === "dashboard" ? "/library" : `/library/${next}`);
+    if (onNavigate) {
+      onNavigate(next);
       return;
     }
     setView(next);

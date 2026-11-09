@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
-import Link from "next/link";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BookOpen, Library, LogOut, Users, Undo2, Settings, FileBarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,20 @@ export default function LibrarianLayout({ children }: { children: ReactNode }) {
   const { ready, user, logout } = useApp();
   const router = useRouter();
   const pathname = usePathname();
+  const [section, setSection] = useState<ReturnType<typeof libraryView> | null>(null);
+  const shown = section ?? libraryView(pathname);
+
+  useEffect(() => {
+    const sync = () => setSection(libraryView(window.location.pathname));
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+
+  function show(href: string) {
+    const next = libraryView(href);
+    setSection(next);
+    if (window.location.pathname !== href) window.history.pushState(null, "", href);
+  }
 
   useEffect(() => {
     if (!ready) return;
@@ -63,12 +76,12 @@ export default function LibrarianLayout({ children }: { children: ReactNode }) {
         <nav className="flex flex-col gap-0.5">
           {ITEMS.map((item) => {
             const Icon = item.icon;
-            const active = item.href === "/library" ? pathname === "/library" : pathname.startsWith(item.href);
+            const active = libraryView(item.href) === shown;
             return (
-              <Link key={item.href} href={item.href} prefetch={false} className={`flex min-h-9 items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657] hover:bg-[#f4f6f9]"}`}>
+              <button key={item.href} type="button" onClick={() => show(item.href)} className={`flex min-h-9 items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657] hover:bg-[#f4f6f9]"}`}>
                 <Icon className="size-4" />
                 {item.label}
-              </Link>
+              </button>
             );
           })}
         </nav>
@@ -91,17 +104,17 @@ export default function LibrarianLayout({ children }: { children: ReactNode }) {
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden" aria-label="Library pages">
             {ITEMS.map((item) => {
-              const active = item.href === "/library" ? pathname === "/library" : pathname.startsWith(item.href);
+              const active = libraryView(item.href) === shown;
               return (
-                <Link key={item.href} href={item.href} prefetch={false} className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657]"}`}>
+                <button key={item.href} type="button" onClick={() => show(item.href)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${active ? "bg-[#e7f0ff] text-[#1b6de0]" : "text-[#3e4657]"}`}>
                   {item.label}
-                </Link>
+                </button>
               );
             })}
           </nav>
         </header>
         <main className="p-4 md:p-6">
-          <LibraryDesk mode="desk" view={libraryView(pathname)} />
+          <LibraryDesk mode="desk" view={shown} onNavigate={(next) => show(next === "dashboard" ? "/library" : `/library/${next}`)} />
           {children}
         </main>
       </div>
